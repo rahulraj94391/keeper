@@ -1,18 +1,24 @@
 package io.github.rahulraj94391.keeper.presentation.settings
 
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
+import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 class SettingsViewModelTest {
 
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
     private val authenticator = testAuthenticator()
-    private val viewModel = SettingsViewModel(authenticator)
+    private val viewModel by lazy { SettingsViewModel(authenticator) { BiometricAvailability.Available } }
 
     @Test
     fun lockNow_locksTheVault() = runTest {

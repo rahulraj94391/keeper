@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.rahulraj94391.keeper.KeeperApplication
-import io.github.rahulraj94391.keeper.data.auth.MasterPasswordVaultAuthenticator
+import io.github.rahulraj94391.keeper.data.auth.BiometricAvailabilityChecker
+import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
 import io.github.rahulraj94391.keeper.data.local.KeeperDatabase
 import io.github.rahulraj94391.keeper.data.repository.EncryptedCredentialRepository
 import io.github.rahulraj94391.keeper.data.vault.RoomVaultMetadataStore
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
+import io.github.rahulraj94391.keeper.security.AndroidBiometricKeyStore
 import io.github.rahulraj94391.keeper.security.VaultKeyManager
 import io.github.rahulraj94391.keeper.security.VaultSession
 import kotlinx.coroutines.CoroutineScope
@@ -26,12 +28,15 @@ class AppContainer(context: Context) {
     /** Sole owner of the in-memory vault key. */
     val vaultSession = VaultSession()
 
-    val vaultAuthenticator: VaultAuthenticator = MasterPasswordVaultAuthenticator(
+    val vaultAuthenticator: VaultAuthenticator = LocalVaultAuthenticator(
         store = RoomVaultMetadataStore(database.vaultMetadataDao()),
         keyManager = VaultKeyManager(),
         session = vaultSession,
+        biometricKeyStore = AndroidBiometricKeyStore(),
         appScope = appScope,
     )
+
+    val biometricAvailability = BiometricAvailabilityChecker(context)
 
     val credentialRepository: CredentialRepository =
         EncryptedCredentialRepository(database.credentialDao(), vaultSession)

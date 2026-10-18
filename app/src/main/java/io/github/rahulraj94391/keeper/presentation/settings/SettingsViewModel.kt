@@ -5,10 +5,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.rahulraj94391.keeper.di.appContainer
+import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
+import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
+import kotlinx.coroutines.launch
+import java.security.GeneralSecurityException
+import javax.crypto.Cipher
 
 enum class SettingsDialog { ExportPassphrase, RestoreConfirm, RestorePassphrase, Limitations }
 
@@ -24,19 +30,80 @@ data class BackupPassphraseForm(
     override fun toString(): String = "BackupPassphraseForm(passphraseError=$passphraseError)"
 }
 
+enum class BiometricSettingsMessage { Enabled, EnableFailed, Lockout }
+
 data class SettingsUiState(
+    val biometricEnabled: Boolean = false,
+    val biometricAvailability: BiometricAvailability = BiometricAvailability.Unavailable,
+    /** A cipher waiting to be shown in BiometricPrompt to turn biometrics on. No key material. */
+    val biometricRequest: Cipher? = null,
+    val biometricMessage: BiometricSettingsMessage? = null,
     val dialog: SettingsDialog? = null,
     val backupForm: BackupPassphraseForm = BackupPassphraseForm(),
     /** True after a backup flow ends, until the screen has told the user it isn't available yet. */
     val showBackupUnavailable: Boolean = false,
 )
 
-class SettingsViewModel(private val authenticator: VaultAuthenticator) : ViewModel() {
+class SettingsViewModel(
+    private val authenticator: VaultAuthenticator,
+    private val biometricAvailability: () -> BiometricAvailability,
+) : ViewModel() {
 
-    var uiState by mutableStateOf(SettingsUiState())
+    var uiState by mutableStateOf(SettingsUiState(biometricAvailability = biometricAvailability()))
         private set
 
+    init {
+        viewModelScope.launch {
+            authenticator.biometricEnabled.collect { uiState = uiState.copy(biometricEnabled = it) }
+        }
+    }
+
     fun lockNow() = authenticator.lock()
+
+    /** Re-checks the device, e.g. after the user returns from enrolling a fingerprint. */
+    fun refreshBiometricAvailability() {
+        uiState = uiState.copy(biometricAvailability = biometricAvailability())
+    }
+
+    fun onBiometricToggle(enable: Boolean) {
+        if (!enable) {
+            viewModelScope.launch { authenticator.disableBiometric() }
+            return
+        }
+        if (uiState.biometricAvailability != BiometricAvailability.Available) return
+        viewModelScope.launch {
+            uiState = try {
+                uiState.copy(biometricRequest = authenticator.startBiometricEnrollment(), biometricMessage = null)
+            } catch (_: GeneralSecurityException) {
+                uiState.copy(biometricMessage = BiometricSettingsMessage.EnableFailed)
+            } catch (_: IllegalStateException) {
+                // Keystore refuses when no biometric is enrolled; also covers a locked vault.
+                uiState.copy(biometricMessage = BiometricSettingsMessage.EnableFailed)
+            }
+        }
+    }
+
+    fun onBiometricRequestShown() {
+        uiState = uiState.copy(biometricRequest = null)
+    }
+
+    fun onBiometricResult(result: BiometricPromptResult) {
+        when (result) {
+            is BiometricPromptResult.Success -> viewModelScope.launch {
+                val enabled = authenticator.completeBiometricEnrollment(result.cipher)
+                uiState = uiState.copy(
+                    biometricMessage = if (enabled) BiometricSettingsMessage.Enabled else BiometricSettingsMessage.EnableFailed,
+                )
+            }
+            BiometricPromptResult.Cancelled -> Unit
+            BiometricPromptResult.Lockout -> uiState = uiState.copy(biometricMessage = BiometricSettingsMessage.Lockout)
+            BiometricPromptResult.Error -> uiState = uiState.copy(biometricMessage = BiometricSettingsMessage.EnableFailed)
+        }
+    }
+
+    fun onBiometricMessageShown() {
+        uiState = uiState.copy(biometricMessage = null)
+    }
 
     fun onExportClick() = openDialog(SettingsDialog.ExportPassphrase)
     fun onRestoreClick() = openDialog(SettingsDialog.RestoreConfirm)
@@ -85,7 +152,7 @@ class SettingsViewModel(private val authenticator: VaultAuthenticator) : ViewMod
     // Export and restore need encrypted storage and the backup format, which come in a later
     // phase. Until then the flow ends here without touching any file or the vault.
     private fun finishBackupFlow() {
-        uiState = SettingsUiState(showBackupUnavailable = true)
+        uiState = uiState.copy(dialog = null, backupForm = BackupPassphraseForm(), showBackupUnavailable = true)
     }
 
     private fun openDialog(dialog: SettingsDialog) {
@@ -97,7 +164,10 @@ class SettingsViewModel(private val authenticator: VaultAuthenticator) : ViewMod
         const val MIN_PASSPHRASE_LENGTH = 12
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer { SettingsViewModel(appContainer().vaultAuthenticator) }
+            initializer {
+                val container = appContainer()
+                SettingsViewModel(container.vaultAuthenticator, container.biometricAvailability::check)
+            }
         }
     }
 }

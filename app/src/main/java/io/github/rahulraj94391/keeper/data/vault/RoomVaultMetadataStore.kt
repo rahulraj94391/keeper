@@ -3,6 +3,7 @@ package io.github.rahulraj94391.keeper.data.vault
 import io.github.rahulraj94391.keeper.data.local.VaultMetadataDao
 import io.github.rahulraj94391.keeper.data.local.VaultMetadataEntity
 import io.github.rahulraj94391.keeper.security.Argon2Params
+import io.github.rahulraj94391.keeper.security.BiometricWrap
 import io.github.rahulraj94391.keeper.security.SealedBox
 import io.github.rahulraj94391.keeper.security.VaultKeyMetadata
 
@@ -27,7 +28,17 @@ class RoomVaultMetadataStore(private val dao: VaultMetadataDao) : VaultMetadataS
         masterSalt = masterSalt,
         wrapAlgorithm = wrapAlgorithm,
         masterWrappedVek = SealedBox(masterWrappedVekNonce, masterWrappedVekCiphertext),
+        biometric = biometricOrNull(),
     )
+
+    // A half-filled biometric record is treated as "off"; the master password still works.
+    private fun VaultMetadataEntity.biometricOrNull(): BiometricWrap? {
+        if (!biometricEnabled) return null
+        val alias = biometricKeystoreAlias ?: return null
+        val nonce = biometricWrappedVekNonce ?: return null
+        val ciphertext = biometricWrappedVekCiphertext ?: return null
+        return BiometricWrap(alias, SealedBox(nonce, ciphertext))
+    }
 
     private fun VaultKeyMetadata.toEntity() = VaultMetadataEntity(
         schemaVersion = schemaVersion,
@@ -41,5 +52,9 @@ class RoomVaultMetadataStore(private val dao: VaultMetadataDao) : VaultMetadataS
         wrapAlgorithm = wrapAlgorithm,
         masterWrappedVekNonce = masterWrappedVek.nonce,
         masterWrappedVekCiphertext = masterWrappedVek.ciphertext,
+        biometricEnabled = biometric != null,
+        biometricKeystoreAlias = biometric?.keyAlias,
+        biometricWrappedVekNonce = biometric?.wrappedVek?.nonce,
+        biometricWrappedVekCiphertext = biometric?.wrappedVek?.ciphertext,
     )
 }

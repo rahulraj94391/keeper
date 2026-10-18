@@ -1,6 +1,7 @@
 package io.github.rahulraj94391.keeper.presentation.unlock
 
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
+import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
@@ -23,7 +24,7 @@ class UnlockViewModelTest {
     fun setUp() = runTest {
         authenticator.createVault("fake master password".toCharArray())
         authenticator.lock()
-        viewModel = UnlockViewModel(authenticator)
+        viewModel = UnlockViewModel(authenticator) { BiometricAvailability.Available }
     }
 
     @Test

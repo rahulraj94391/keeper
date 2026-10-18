@@ -11,12 +11,25 @@ class VaultKeyMetadata(
     val masterSalt: ByteArray,
     val wrapAlgorithm: String,
     val masterWrappedVek: SealedBox,
+    /** Present only while biometric unlock is turned on. */
+    val biometric: BiometricWrap? = null,
 ) {
-    override fun toString(): String = "VaultKeyMetadata(schemaVersion=$schemaVersion, kdf=$kdfAlgorithm $kdfParams)"
+    val biometricEnabled: Boolean get() = biometric != null
+
+    fun withBiometric(biometric: BiometricWrap?) =
+        VaultKeyMetadata(schemaVersion, kdfAlgorithm, kdfParams, masterSalt, wrapAlgorithm, masterWrappedVek, biometric)
+
+    override fun toString(): String =
+        "VaultKeyMetadata(schemaVersion=$schemaVersion, kdf=$kdfAlgorithm $kdfParams, biometric=$biometricEnabled)"
 
     companion object {
         const val SCHEMA_VERSION = 1
         const val KDF_ARGON2ID = "argon2id"
         const val WRAP_AES_256_GCM = "aes-256-gcm"
     }
+}
+
+/** The vault key wrapped by the Keystore biometric key, plus that key's alias. */
+class BiometricWrap(val keyAlias: String, val wrappedVek: SealedBox) {
+    override fun toString(): String = "BiometricWrap(keyAlias=$keyAlias)"
 }

@@ -37,6 +37,19 @@
     <string name="unlock_subtitle">Enter your master password to open your vault.</string>
     <string name="unlock_button">Unlock</string>
     <string name="unlock_error">Could not unlock vault. Check your password or vault data.</string>
+    <string name="unlock_with_biometrics">Unlock with biometrics</string>
+
+    <!-- Biometric prompt and messages -->
+    <string name="biometric_unlock_title">Unlock Keeper</string>
+    <string name="biometric_unlock_subtitle">Confirm it’s you to open your vault</string>
+    <string name="biometric_use_password">Use master password</string>
+    <string name="biometric_enable_title">Turn on biometric unlock</string>
+    <string name="biometric_enable_subtitle">Confirm with your fingerprint or face</string>
+    <string name="biometric_invalidated">Biometric unlock was turned off because the fingerprints or faces on this device changed. Unlock with your master password, then turn it on again in Settings.</string>
+    <string name="biometric_lockout">Too many attempts. Use your master password, or try biometrics again later.</string>
+    <string name="biometric_failed">Biometric unlock didn’t work. Use your master password.</string>
+    <string name="biometric_enable_failed">Couldn’t turn on biometric unlock. Try again.</string>
+    <string name="biometric_enabled_message">Biometric unlock is on</string>
 
     <!-- Vault list -->
     <string name="vault_lock">Lock vault</string>
@@ -97,7 +110,10 @@
     <string name="settings_section_backup">Backup</string>
     <string name="settings_section_about">About</string>
     <string name="settings_biometric">Unlock with biometrics</string>
-    <string name="settings_biometric_unavailable">Available once vault encryption is in place</string>
+    <string name="settings_biometric_summary">Use a fingerprint or face instead of your master password</string>
+    <string name="settings_biometric_not_enrolled">Add a fingerprint or face in your device settings first</string>
+    <string name="settings_biometric_no_hardware">This device doesn’t have a strong biometric sensor</string>
+    <string name="settings_biometric_unavailable">Biometrics aren’t available right now</string>
     <string name="settings_lock_now">Lock now</string>
     <string name="settings_lock_now_summary">Close the vault until you enter your master password</string>
     <string name="settings_export">Export encrypted backup</string>

@@ -4,12 +4,13 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.rahulraj94391.keeper.data.auth.MasterPasswordVaultAuthenticator
+import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
 import io.github.rahulraj94391.keeper.data.local.KeeperDatabase
 import io.github.rahulraj94391.keeper.data.repository.EncryptedCredentialRepository
 import io.github.rahulraj94391.keeper.data.vault.RoomVaultMetadataStore
 import io.github.rahulraj94391.keeper.domain.model.Credential
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.security.AndroidBiometricKeyStore
 import io.github.rahulraj94391.keeper.security.Argon2Params
 import io.github.rahulraj94391.keeper.security.VaultKeyManager
 import io.github.rahulraj94391.keeper.security.VaultSession
@@ -53,10 +54,11 @@ class EncryptedStorageTest {
     @After
     fun closeDb() = db.close()
 
-    private fun authenticator(session: VaultSession) = MasterPasswordVaultAuthenticator(
+    private fun authenticator(session: VaultSession) = LocalVaultAuthenticator(
         store = RoomVaultMetadataStore(db.vaultMetadataDao()),
         keyManager = VaultKeyManager(kdfParams = Argon2Params(memoryKiB = 19_456, iterations = 2)),
         session = session,
+        biometricKeyStore = AndroidBiometricKeyStore("keeper_test_biometric_key"),
         appScope = CoroutineScope(Dispatchers.Unconfined),
         cryptoDispatcher = Dispatchers.Unconfined,
     )

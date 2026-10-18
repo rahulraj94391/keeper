@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.security.VaultSession
+import io.github.rahulraj94391.keeper.testing.FakeBiometricKeyStore
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -19,7 +20,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class MasterPasswordVaultAuthenticatorTest {
+class LocalVaultAuthenticatorTest {
 
     private val store = InMemoryVaultMetadataStore()
     private val session = VaultSession()
@@ -108,8 +109,9 @@ class MasterPasswordVaultAuthenticatorTest {
                 return store.load()
             }
         }
-        val authenticator = MasterPasswordVaultAuthenticator(
-            slowStore, testKeyManager(), session, CoroutineScope(Dispatchers.Unconfined), Dispatchers.Unconfined,
+        val authenticator = LocalVaultAuthenticator(
+            slowStore, testKeyManager(), session, FakeBiometricKeyStore(),
+            CoroutineScope(Dispatchers.Unconfined), Dispatchers.Unconfined,
         )
         assertEquals(VaultState.Loading, authenticator.state.value)
 

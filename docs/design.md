@@ -97,7 +97,7 @@ adb logcat -d -s Argon2idBenchmark:I
 ## 2. Master-password key wrapping and vault session
 
 Code: `security/VaultKeyManager.kt`, `security/VaultSession.kt`,
-`data/auth/MasterPasswordVaultAuthenticator.kt`.
+`data/auth/LocalVaultAuthenticator.kt`.
 
 ### 2.1 Key hierarchy (so far)
 
@@ -153,7 +153,8 @@ that check to finish rather than acting on the `Loading` state.
 Code: `data/local/`, `data/vault/RoomVaultMetadataStore.kt`,
 `data/repository/EncryptedCredentialRepository.kt`, `data/repository/CredentialPayloadCodec.kt`.
 
-Database file `keeper_vault.db`, schema version 1. Exported schemas live in `app/schemas/` and are
+Database file `keeper_vault.db`, schema version 2 (version 1 plus the biometric columns, added by
+a Room auto-migration that `MigrationTest` checks keeps an existing vault unlockable). Exported schemas live in `app/schemas/` and are
 committed so later migrations can be written and tested. There is no destructive-migration
 fallback: a failed migration must never wipe the vault. The file is excluded from Android
 backup and device transfer (`data_extraction_rules.xml`).
@@ -162,7 +163,7 @@ backup and device transfer (`data_extraction_rules.xml`).
 
 | Table | Columns | Readable without the vault key |
 |---|---|---|
-| `vault_metadata` | one row: section 2.2 fields | KDF settings, salt, algorithm names |
+| `vault_metadata` | one row: section 2.2 fields, plus section 4.2 biometric fields | KDF settings, salt, algorithm names, whether biometrics are on, key alias |
 | `credentials` | `id`, `payload_schema_version`, `nonce`, `ciphertext` | the random record id (UUID) only |
 
 No title, username, password, URL or notes are stored in plain columns, and there is no plaintext
@@ -195,3 +196,64 @@ search index. Search runs over records decrypted in memory while the vault is un
 - Instrumented (real Room, `EncryptedStorageTest`): vault survives a simulated restart and
   unlocks only with the right password; a raw dump of the tables contains no plaintext; delete
   removes the row.
+
+## 4. Biometric unlock
+
+Code: `security/BiometricKeyStore.kt`, `data/auth/LocalVaultAuthenticator.kt`,
+`presentation/common/BiometricPromptLauncher.kt`.
+
+**Library:** `androidx.biometric:biometric:1.1.0`, the latest stable release (1.2 and 1.4 are
+still alpha). It needs a `FragmentActivity`, so `MainActivity` extends one, and Fragment is pinned
+to 1.9.1 instead of the 1.2.5 that Biometric 1.1.0 asks for.
+
+### 4.1 Keystore key
+
+A separate AES-256-GCM key in the Android Keystore, alias `keeper_biometric_vek_wrap_v1`:
+
+- `setUserAuthenticationRequired(true)` with `setUserAuthenticationParameters(0,
+  AUTH_BIOMETRIC_STRONG)`: every single use needs a fresh Class 3 biometric. Device PIN, pattern
+  or password are not accepted (PRD 6.3).
+- `setInvalidatedByBiometricEnrollment(true)`: adding or removing a fingerprint or face makes the
+  key permanently unusable.
+- Randomized encryption (the default): the Keystore picks the GCM nonce; Keeper stores it.
+
+The key material never leaves the Keystore. Whether it is hardware-backed depends on the device
+and is not checked or claimed (PRD 15).
+
+### 4.2 Stored fields (`vault_metadata`, schema 2)
+
+`biometric_enabled`, `biometric_keystore_alias`, `biometric_wrapped_vek_nonce`,
+`biometric_wrapped_vek_ciphertext`. Associated data for the wrap is
+`keeper/biometric-wrapped-vek/v1;alias=<alias>`. A row with the flag set but any field missing is
+read as "off".
+
+### 4.3 Flows
+
+Each flow is split in two so that only a BiometricPrompt-authorized `CryptoObject` can complete it;
+a successful prompt result alone never unlocks anything.
+
+- **Turn on** (Settings, vault unlocked): create a new Keystore key → prompt with its encrypt
+  cipher → wrap the VEK with the authorized cipher → save. If wrapping fails, the key is deleted.
+- **Unlock:** load the wrap → get a decrypt cipher with the stored nonce → prompt → unwrap with the
+  authorized cipher → open the session. The Unlock screen prompts once automatically when
+  biometrics are on, and always offers the master password.
+- **Turn off:** clear the stored fields and delete the Keystore key. No prompt needed.
+- **Invalidated key** (enrollments changed, or key missing): biometric unlock is turned off, the
+  user sees why, and the master password still works. They can turn it on again after unlocking.
+- **Prompt results:** cancel or "Use master password" shows nothing; lockout and other errors
+  show a short message. A non-matching finger is handled inside the system prompt.
+
+### 4.4 Tests
+
+- JVM (`BiometricUnlockTest`, ViewModel tests) with a fake key store that uses a plain AES key:
+  enable, unlock to the same VEK, wrong cipher, invalidation fallback, disable, restart.
+- Instrumented: `MigrationTest` (v1 → v2 keeps the vault unlockable);
+  `AndroidBiometricKeyStoreTest` checks the real Keystore key refuses to work without
+  authentication. It is skipped on devices with no enrolled biometric.
+- Still needed (PRD 11): a run on a real device, or an emulator with an enrolled fingerprint,
+  covering turn on, unlock, cancel, and re-enrollment invalidation.
+
+### 4.5 Known gap
+
+Auto-lock isn't implemented yet. When it is (hardening phase), it must not lock the vault just
+because the system BiometricPrompt is in front of the app (PRD 6.6).

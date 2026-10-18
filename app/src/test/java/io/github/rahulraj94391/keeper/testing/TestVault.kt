@@ -1,6 +1,6 @@
 package io.github.rahulraj94391.keeper.testing
 
-import io.github.rahulraj94391.keeper.data.auth.MasterPasswordVaultAuthenticator
+import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
 import io.github.rahulraj94391.keeper.data.vault.InMemoryVaultMetadataStore
 import io.github.rahulraj94391.keeper.data.vault.VaultMetadataStore
 import io.github.rahulraj94391.keeper.security.Argon2Params
@@ -18,10 +18,12 @@ fun testKeyManager() = VaultKeyManager(kdfParams = FAST_KDF_PARAMS)
 fun testAuthenticator(
     store: VaultMetadataStore = InMemoryVaultMetadataStore(),
     session: VaultSession = VaultSession(),
-) = MasterPasswordVaultAuthenticator(
+    biometricKeyStore: FakeBiometricKeyStore = FakeBiometricKeyStore(),
+) = LocalVaultAuthenticator(
     store = store,
     keyManager = testKeyManager(),
     session = session,
+    biometricKeyStore = biometricKeyStore,
     appScope = CoroutineScope(Dispatchers.Unconfined),
     cryptoDispatcher = Dispatchers.Unconfined,
 )

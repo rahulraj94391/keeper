@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,16 +30,37 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptText
 import io.github.rahulraj94391.keeper.presentation.common.KeeperLogo
 import io.github.rahulraj94391.keeper.presentation.common.MasterPasswordField
+import io.github.rahulraj94391.keeper.presentation.common.rememberBiometricPrompt
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 
 @Composable
 fun UnlockScreen(viewModel: UnlockViewModel = viewModel(factory = UnlockViewModel.Factory)) {
+    val uiState = viewModel.uiState
+    val showPrompt = rememberBiometricPrompt(viewModel::onBiometricResult)
+    val promptText = BiometricPromptText(
+        title = stringResource(R.string.biometric_unlock_title),
+        subtitle = stringResource(R.string.biometric_unlock_subtitle),
+        negativeButton = stringResource(R.string.biometric_use_password),
+    )
+
+    LaunchedEffect(uiState.showBiometricButton) {
+        if (uiState.showBiometricButton) viewModel.autoPromptOnce()
+    }
+    LaunchedEffect(uiState.biometricRequest) {
+        uiState.biometricRequest?.let { cipher ->
+            viewModel.onBiometricRequestShown()
+            showPrompt(promptText, cipher)
+        }
+    }
+
     UnlockContent(
-        uiState = viewModel.uiState,
+        uiState = uiState,
         onPasswordChange = viewModel::onPasswordChange,
         onUnlock = viewModel::unlock,
+        onBiometricClick = viewModel::requestBiometric,
     )
 }
 
@@ -47,6 +69,7 @@ private fun UnlockContent(
     uiState: UnlockUiState,
     onPasswordChange: (String) -> Unit,
     onUnlock: () -> Unit,
+    onBiometricClick: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
     // The field is disabled while unlocking, which drops focus; put it back after a failed
@@ -94,6 +117,29 @@ private fun UnlockContent(
                     Text(stringResource(R.string.unlock_button))
                 }
             }
+            if (uiState.showBiometricButton) {
+                OutlinedButton(
+                    onClick = onBiometricClick,
+                    enabled = !uiState.isUnlocking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.unlock_with_biometrics))
+                }
+            }
+            uiState.biometricMessage?.let { message ->
+                Text(
+                    stringResource(
+                        when (message) {
+                            BiometricMessage.KeyInvalidated -> R.string.biometric_invalidated
+                            BiometricMessage.Lockout -> R.string.biometric_lockout
+                            BiometricMessage.Failed -> R.string.biometric_failed
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -102,6 +148,11 @@ private fun UnlockContent(
 @Composable
 private fun UnlockPreview() {
     KeeperTheme(dynamicColor = false) {
-        UnlockContent(uiState = UnlockUiState(showError = true), onPasswordChange = {}, onUnlock = {})
+        UnlockContent(
+            uiState = UnlockUiState(showError = true, showBiometricButton = true),
+            onPasswordChange = {},
+            onUnlock = {},
+            onBiometricClick = {},
+        )
     }
 }

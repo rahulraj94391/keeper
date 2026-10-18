@@ -59,6 +59,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.bouncycastle.bcprov)
+    implementation(libs.androidx.biometric)
+    // BiometricPrompt needs a FragmentActivity; pin a current Fragment over biometric's old one.
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

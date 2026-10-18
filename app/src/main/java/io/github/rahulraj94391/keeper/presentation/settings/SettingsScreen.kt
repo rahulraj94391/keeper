@@ -2,6 +2,7 @@ package io.github.rahulraj94391.keeper.presentation.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,13 +31,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.BuildConfig
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
+import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptText
 import io.github.rahulraj94391.keeper.presentation.common.MasterPasswordField
+import io.github.rahulraj94391.keeper.presentation.common.rememberBiometricPrompt
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 
 @Composable
@@ -44,10 +50,31 @@ fun SettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
+    val uiState = viewModel.uiState
+    val showPrompt = rememberBiometricPrompt(viewModel::onBiometricResult)
+    val promptText = BiometricPromptText(
+        title = stringResource(R.string.biometric_enable_title),
+        subtitle = stringResource(R.string.biometric_enable_subtitle),
+        negativeButton = stringResource(R.string.action_cancel),
+    )
+    LaunchedEffect(uiState.biometricRequest) {
+        uiState.biometricRequest?.let { cipher ->
+            viewModel.onBiometricRequestShown()
+            showPrompt(promptText, cipher)
+        }
+    }
+    // The user may have just enrolled a fingerprint in system settings.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshBiometricAvailability()
+        onPauseOrDispose { }
+    }
+
     SettingsContent(
-        uiState = viewModel.uiState,
+        uiState = uiState,
         actions = SettingsActions(
             onBack = onBack,
+            onBiometricToggle = viewModel::onBiometricToggle,
+            onBiometricMessageShown = viewModel::onBiometricMessageShown,
             onLockNow = viewModel::lockNow,
             onExport = viewModel::onExportClick,
             onRestore = viewModel::onRestoreClick,
@@ -65,6 +92,8 @@ fun SettingsScreen(
 
 private class SettingsActions(
     val onBack: () -> Unit,
+    val onBiometricToggle: (Boolean) -> Unit,
+    val onBiometricMessageShown: () -> Unit,
     val onLockNow: () -> Unit,
     val onExport: () -> Unit,
     val onRestore: () -> Unit,
@@ -89,6 +118,19 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
             actions.onBackupUnavailableShown()
         }
     }
+    LaunchedEffect(uiState.biometricMessage) {
+        val message = uiState.biometricMessage ?: return@LaunchedEffect
+        actions.onBiometricMessageShown()
+        snackbarHostState.showSnackbar(
+            resources.getString(
+                when (message) {
+                    BiometricSettingsMessage.Enabled -> R.string.biometric_enabled_message
+                    BiometricSettingsMessage.EnableFailed -> R.string.biometric_enable_failed
+                    BiometricSettingsMessage.Lockout -> R.string.biometric_lockout
+                }
+            )
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -110,11 +152,7 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
                 .verticalScroll(rememberScrollState())
         ) {
             SectionHeader(R.string.settings_section_security)
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_biometric)) },
-                supportingContent = { Text(stringResource(R.string.settings_biometric_unavailable)) },
-                trailingContent = { Switch(checked = false, onCheckedChange = null, enabled = false) },
-            )
+            BiometricRow(uiState, actions.onBiometricToggle)
             SettingsRow(R.string.settings_lock_now, R.string.settings_lock_now_summary, actions.onLockNow)
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -243,6 +281,32 @@ private fun SectionHeader(textRes: Int) {
 }
 
 @Composable
+private fun BiometricRow(uiState: SettingsUiState, onToggle: (Boolean) -> Unit) {
+    // Turning it off must always be possible, even if the sensor became unavailable.
+    val enabled = uiState.biometricEnabled || uiState.biometricAvailability == BiometricAvailability.Available
+    val summary = when {
+        uiState.biometricEnabled -> R.string.settings_biometric_summary
+        else -> when (uiState.biometricAvailability) {
+            BiometricAvailability.Available -> R.string.settings_biometric_summary
+            BiometricAvailability.NotEnrolled -> R.string.settings_biometric_not_enrolled
+            BiometricAvailability.NoHardware -> R.string.settings_biometric_no_hardware
+            BiometricAvailability.Unavailable -> R.string.settings_biometric_unavailable
+        }
+    }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_biometric)) },
+        supportingContent = { Text(stringResource(summary)) },
+        trailingContent = { Switch(checked = uiState.biometricEnabled, onCheckedChange = null, enabled = enabled) },
+        modifier = Modifier.toggleable(
+            value = uiState.biometricEnabled,
+            enabled = enabled,
+            role = Role.Switch,
+            onValueChange = onToggle,
+        ),
+    )
+}
+
+@Composable
 private fun SettingsRow(titleRes: Int, summaryRes: Int, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(stringResource(titleRes)) },
@@ -257,7 +321,7 @@ private fun SettingsPreview() {
     KeeperTheme(dynamicColor = false) {
         SettingsContent(
             uiState = SettingsUiState(),
-            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
+            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
         )
     }
 }

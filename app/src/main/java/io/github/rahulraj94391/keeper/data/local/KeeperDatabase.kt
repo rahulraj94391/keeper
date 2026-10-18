@@ -1,14 +1,19 @@
 package io.github.rahulraj94391.keeper.data.local
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
     entities = [VaultMetadataEntity::class, CredentialEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
+    autoMigrations = [
+        // 1 -> 2: biometric unlock columns on vault_metadata.
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 abstract class KeeperDatabase : RoomDatabase() {
     abstract fun vaultMetadataDao(): VaultMetadataDao
