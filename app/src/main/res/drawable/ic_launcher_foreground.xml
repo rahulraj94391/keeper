@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shield with a keyhole. Kept inside the 66dp safe zone centred at (54,54). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield, left (lit) half -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,29L33,37V54C33,67 42,76.5 54,81Z" />
+    <!-- Shield, right (shaded) half -->
+    <path
+        android:fillColor="#D6DEF2"
+        android:pathData="M54,29L75,37V54C75,67 66,76.5 54,81Z" />
+    <!-- Keyhole, cut out in the background colour -->
+    <path
+        android:fillColor="#1B2559"
+        android:pathData="M51.2,55.3A6,6 0,1 1,56.8 55.3L58,66H50Z" />
+</vector>
