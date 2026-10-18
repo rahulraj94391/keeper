@@ -20,3 +20,6 @@ data object SetupRoute
 
 @Serializable
 data object UnlockRoute
+
+@Serializable
+data object SettingsRoute

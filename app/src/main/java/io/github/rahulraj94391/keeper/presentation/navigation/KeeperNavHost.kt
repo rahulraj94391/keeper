@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.presentation.credential.CredentialDetailScreen
 import io.github.rahulraj94391.keeper.presentation.credential.CredentialEditScreen
+import io.github.rahulraj94391.keeper.presentation.settings.SettingsScreen
 import io.github.rahulraj94391.keeper.presentation.setup.SetupScreen
 import io.github.rahulraj94391.keeper.presentation.unlock.UnlockScreen
 import io.github.rahulraj94391.keeper.presentation.vault.VaultListScreen
@@ -50,6 +51,7 @@ fun KeeperNavHost(
                 onAddClick = dropUnlessResumed { navController.navigate(CredentialEditRoute()) },
                 onCredentialClick = { id -> navController.navigateIfResumed(CredentialDetailRoute(id)) },
                 onLockClick = onLock,
+                onSettingsClick = dropUnlessResumed { navController.navigate(SettingsRoute) },
             )
         }
         composable<CredentialDetailRoute> {
@@ -60,6 +62,9 @@ fun KeeperNavHost(
         }
         composable<CredentialEditRoute> {
             CredentialEditScreen(onDone = dropUnlessResumed { navController.popBackStack() })
+        }
+        composable<SettingsRoute> {
+            SettingsScreen(onBack = dropUnlessResumed { navController.popBackStack() })
         }
     }
 }
@@ -74,7 +79,8 @@ private fun NavDestination.belongsTo(state: VaultState): Boolean = when (state) 
     VaultState.NoVault -> hasRoute<SetupRoute>()
     VaultState.Locked -> hasRoute<UnlockRoute>()
     VaultState.Unlocked ->
-        hasRoute<VaultListRoute>() || hasRoute<CredentialDetailRoute>() || hasRoute<CredentialEditRoute>()
+        hasRoute<VaultListRoute>() || hasRoute<CredentialDetailRoute>() ||
+            hasRoute<CredentialEditRoute>() || hasRoute<SettingsRoute>()
 }
 
 private fun <T : Any> NavHostController.navigateIfResumed(route: T) {

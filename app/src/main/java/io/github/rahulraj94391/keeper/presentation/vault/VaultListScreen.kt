@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +52,7 @@ fun VaultListScreen(
     onAddClick: () -> Unit,
     onCredentialClick: (id: String) -> Unit,
     onLockClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     viewModel: VaultListViewModel = viewModel(factory = VaultListViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -61,6 +63,7 @@ fun VaultListScreen(
         onAddClick = onAddClick,
         onCredentialClick = onCredentialClick,
         onLockClick = onLockClick,
+        onSettingsClick = onSettingsClick,
     )
 }
 
@@ -73,6 +76,7 @@ private fun VaultListContent(
     onAddClick: () -> Unit,
     onCredentialClick: (id: String) -> Unit,
     onLockClick: () -> Unit,
+    onSettingsClick: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -81,6 +85,9 @@ private fun VaultListContent(
                 actions = {
                     IconButton(onClick = onLockClick) {
                         Icon(Icons.Filled.Lock, contentDescription = stringResource(R.string.vault_lock))
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.vault_settings))
                     }
                 },
             )
@@ -227,6 +234,7 @@ private fun VaultListPreview() {
             onAddClick = {},
             onCredentialClick = {},
             onLockClick = {},
+            onSettingsClick = {},
         )
     }
 }

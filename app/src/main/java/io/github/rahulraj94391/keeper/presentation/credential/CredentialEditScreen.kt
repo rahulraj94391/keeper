@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +73,14 @@ fun CredentialEditScreen(
             onFavoriteChange = viewModel::onFavoriteChange,
             onSave = viewModel::save,
             onClose = onDone,
+            onOpenGenerator = viewModel::openGenerator,
+        ),
+        generatorActions = PasswordGeneratorActions(
+            onLengthChange = viewModel::onGeneratorLengthChange,
+            onGroupChange = viewModel::onGeneratorGroupChange,
+            onRegenerate = viewModel::regeneratePassword,
+            onUse = viewModel::useGeneratedPassword,
+            onDismiss = viewModel::closeGenerator,
         ),
     )
 }
@@ -85,11 +94,16 @@ private class CredentialEditActions(
     val onFavoriteChange: (Boolean) -> Unit,
     val onSave: () -> Unit,
     val onClose: () -> Unit,
+    val onOpenGenerator: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CredentialEditContent(uiState: CredentialEditUiState, actions: CredentialEditActions) {
+private fun CredentialEditContent(
+    uiState: CredentialEditUiState,
+    actions: CredentialEditActions,
+    generatorActions: PasswordGeneratorActions,
+) {
     var showDiscardDialog by remember { mutableStateOf(false) }
     val requestClose = {
         if (uiState.hasUnsavedChanges) showDiscardDialog = true else actions.onClose()
@@ -133,6 +147,8 @@ private fun CredentialEditContent(uiState: CredentialEditUiState, actions: Crede
                 .imePadding(),
         )
     }
+
+    uiState.generator?.let { PasswordGeneratorSheet(it, generatorActions) }
 
     if (showDiscardDialog) {
         AlertDialog(
@@ -211,6 +227,10 @@ private fun CredentialForm(
                 imeAction = ImeAction.Next,
             ),
         )
+        TextButton(onClick = actions.onOpenGenerator) {
+            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+            Text(stringResource(R.string.generator_open))
+        }
         FormField(
             value = form.url,
             onValueChange = actions.onUrlChange,
@@ -291,7 +311,8 @@ private fun CredentialEditPreview() {
                 form = CredentialForm(title = "Example Mail", username = "alex@example.com"),
                 errors = CredentialFormErrors(password = FieldError.Required),
             ),
-            actions = CredentialEditActions({}, {}, {}, {}, {}, {}, {}, {}),
+            actions = CredentialEditActions({}, {}, {}, {}, {}, {}, {}, {}, {}),
+            generatorActions = PasswordGeneratorActions({}, { _, _ -> }, {}, {}, {}),
         )
     }
 }

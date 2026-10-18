@@ -1,0 +1,76 @@
+package io.github.rahulraj94391.keeper.presentation.settings
+
+import io.github.rahulraj94391.keeper.data.auth.InMemoryVaultAuthenticator
+import io.github.rahulraj94391.keeper.domain.model.VaultState
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SettingsViewModelTest {
+
+    private val authenticator = InMemoryVaultAuthenticator()
+    private val viewModel = SettingsViewModel(authenticator)
+
+    @Test
+    fun lockNow_locksTheVault() = runTest {
+        authenticator.createVault("fake master password".toCharArray())
+
+        viewModel.lockNow()
+
+        assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun export_rejectsShortAndMismatchedPassphrases() {
+        viewModel.onExportClick()
+        viewModel.onPassphraseChange("short")
+        viewModel.onConfirmationChange("different")
+
+        viewModel.submitExport()
+
+        val form = viewModel.uiState.backupForm
+        assertEquals(PassphraseError.TooShort, form.passphraseError)
+        assertEquals(PassphraseError.Mismatch, form.confirmationError)
+        assertEquals(SettingsDialog.ExportPassphrase, viewModel.uiState.dialog)
+    }
+
+    @Test
+    fun export_validPassphrase_closesDialogClearsFormAndReportsUnavailable() {
+        viewModel.onExportClick()
+        viewModel.onPassphraseChange("a long fake backup phrase")
+        viewModel.onConfirmationChange("a long fake backup phrase")
+
+        viewModel.submitExport()
+
+        assertNull(viewModel.uiState.dialog)
+        assertEquals("", viewModel.uiState.backupForm.passphrase)
+        assertTrue(viewModel.uiState.showBackupUnavailable)
+    }
+
+    @Test
+    fun restore_asksForConfirmationBeforePassphrase() {
+        viewModel.onRestoreClick()
+        assertEquals(SettingsDialog.RestoreConfirm, viewModel.uiState.dialog)
+
+        viewModel.onRestoreConfirmed()
+        assertEquals(SettingsDialog.RestorePassphrase, viewModel.uiState.dialog)
+
+        viewModel.submitRestore()
+        assertEquals(PassphraseError.Required, viewModel.uiState.backupForm.passphraseError)
+    }
+
+    @Test
+    fun dismiss_clearsTypedPassphrase() {
+        viewModel.onExportClick()
+        viewModel.onPassphraseChange("typed but cancelled")
+
+        viewModel.dismissDialog()
+
+        assertNull(viewModel.uiState.dialog)
+        assertEquals("", viewModel.uiState.backupForm.passphrase)
+        assertFalse(viewModel.uiState.showBackupUnavailable)
+    }
+}

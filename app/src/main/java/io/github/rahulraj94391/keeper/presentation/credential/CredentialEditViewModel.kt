@@ -15,6 +15,9 @@ import io.github.rahulraj94391.keeper.domain.model.Credential
 import io.github.rahulraj94391.keeper.domain.model.CredentialLimits
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.presentation.navigation.CredentialEditRoute
+import io.github.rahulraj94391.keeper.security.CharacterGroup
+import io.github.rahulraj94391.keeper.security.PasswordGenerator
+import io.github.rahulraj94391.keeper.security.PasswordOptions
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -45,6 +48,14 @@ data class CredentialFormErrors(
     val isEmpty: Boolean get() = listOf(title, username, password, url, notes).all { it == null }
 }
 
+/** The password generator sheet. Present while the sheet is open, null otherwise. */
+data class GeneratorUiState(
+    val options: PasswordOptions,
+    val password: String,
+) {
+    override fun toString(): String = "GeneratorUiState(options=$options)"
+}
+
 data class CredentialEditUiState(
     val isNew: Boolean,
     val isLoading: Boolean,
@@ -52,11 +63,13 @@ data class CredentialEditUiState(
     val errors: CredentialFormErrors = CredentialFormErrors(),
     val hasUnsavedChanges: Boolean = false,
     val isSaved: Boolean = false,
+    val generator: GeneratorUiState? = null,
 )
 
 class CredentialEditViewModel(
     private val credentialId: String?,
     private val repository: CredentialRepository,
+    private val passwordGenerator: PasswordGenerator = PasswordGenerator(),
 ) : ViewModel() {
 
     var uiState by mutableStateOf(
@@ -65,6 +78,9 @@ class CredentialEditViewModel(
         private set
 
     private var original = CredentialForm()
+
+    // Kept between openings of the sheet so the user's preferred settings stick.
+    private var generatorOptions = PasswordOptions()
 
     init {
         if (credentialId != null) {
@@ -105,6 +121,36 @@ class CredentialEditViewModel(
             repository.save(credential)
             uiState = uiState.copy(isSaved = true, hasUnsavedChanges = false)
         }
+    }
+
+    fun openGenerator() = showGenerated(generatorOptions)
+
+    fun closeGenerator() {
+        uiState = uiState.copy(generator = null)
+    }
+
+    fun regeneratePassword() = showGenerated(generatorOptions)
+
+    fun onGeneratorLengthChange(length: Int) {
+        if (length != generatorOptions.length) showGenerated(generatorOptions.copy(length = length))
+    }
+
+    /** Turning off the last remaining group is ignored; at least one must stay on. */
+    fun onGeneratorGroupChange(group: CharacterGroup, enabled: Boolean) {
+        val groups = if (enabled) generatorOptions.groups + group else generatorOptions.groups - group
+        if (groups.isEmpty() || groups == generatorOptions.groups) return
+        showGenerated(generatorOptions.copy(groups = groups))
+    }
+
+    fun useGeneratedPassword() {
+        val generated = uiState.generator?.password ?: return
+        updateForm { copy(password = generated) }
+        closeGenerator()
+    }
+
+    private fun showGenerated(options: PasswordOptions) {
+        generatorOptions = options
+        uiState = uiState.copy(generator = GeneratorUiState(options, passwordGenerator.generate(options)))
     }
 
     private inline fun updateForm(change: CredentialForm.() -> CredentialForm) {
