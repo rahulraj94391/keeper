@@ -72,10 +72,14 @@ private fun UnlockContent(
     onBiometricClick: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
-    // The field is disabled while unlocking, which drops focus; put it back after a failed
-    // attempt so the user can type again straight away.
-    LaunchedEffect(uiState.isUnlocking) {
-        if (!uiState.isUnlocking) focusRequester.requestFocus()
+    // Focus the field (opening the keyboard) only when the password is the way in: biometrics
+    // are off, or the user just tried a password. With biometrics on, the keyboard would cover
+    // the "Unlock with biometrics" button; tapping the field still opens it.
+    // The field is disabled while unlocking, which drops focus, so this also restores it after
+    // a failed attempt.
+    LaunchedEffect(uiState.isUnlocking, uiState.showBiometricButton) {
+        val passwordIsPrimary = !uiState.showBiometricButton || uiState.showError
+        if (!uiState.isUnlocking && passwordIsPrimary) focusRequester.requestFocus()
     }
 
     Scaffold { innerPadding ->
