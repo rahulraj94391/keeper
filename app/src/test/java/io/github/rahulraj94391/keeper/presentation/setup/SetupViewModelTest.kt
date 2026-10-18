@@ -1,6 +1,6 @@
 package io.github.rahulraj94391.keeper.presentation.setup
 
-import io.github.rahulraj94391.keeper.data.auth.InMemoryVaultAuthenticator
+import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import org.junit.Assert.assertEquals
@@ -15,7 +15,7 @@ class SetupViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val authenticator = InMemoryVaultAuthenticator()
+    private val authenticator = testAuthenticator()
     private val viewModel = SetupViewModel(authenticator)
 
     @Test

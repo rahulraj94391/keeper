@@ -1,6 +1,6 @@
 package io.github.rahulraj94391.keeper.presentation.settings
 
-import io.github.rahulraj94391.keeper.data.auth.InMemoryVaultAuthenticator
+import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -11,7 +11,7 @@ import org.junit.Test
 
 class SettingsViewModelTest {
 
-    private val authenticator = InMemoryVaultAuthenticator()
+    private val authenticator = testAuthenticator()
     private val viewModel = SettingsViewModel(authenticator)
 
     @Test

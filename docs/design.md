@@ -93,3 +93,57 @@ Run it with:
 ./gradlew connectedDebugAndroidTest
 adb logcat -d -s Argon2idBenchmark:I
 ```
+
+## 2. Master-password key wrapping and vault session
+
+Code: `security/VaultKeyManager.kt`, `security/VaultSession.kt`,
+`data/auth/MasterPasswordVaultAuthenticator.kt`.
+
+### 2.1 Key hierarchy (so far)
+
+1. **Vault encryption key (VEK):** 32 random bytes from `SecureRandom`, made once per vault. It
+   will encrypt every credential record (next phase).
+2. **Master key-encryption key (KEK):** Argon2id(master password, 16-byte random salt, stored
+   parameters). Used only to wrap and unwrap the VEK, then wiped.
+
+The VEK is not derived from the password, so changing the master password later only re-wraps
+the VEK instead of re-encrypting every record, and biometric unlock can wrap the same VEK
+independently.
+
+### 2.2 Stored metadata
+
+`VaultKeyMetadata`, saved as one record so setup is all-or-nothing:
+
+| Field | Value |
+|---|---|
+| `schemaVersion` | 1 |
+| `kdfAlgorithm` | `argon2id` |
+| `kdfParams` | memory, iterations, parallelism, output length, version (section 1.1) |
+| `masterSalt` | 16 random bytes |
+| `wrapAlgorithm` | `aes-256-gcm` |
+| `masterWrappedVek` | nonce + VEK ciphertext and tag |
+
+**Associated data for the wrap** is a canonical string of the schema version, every KDF setting
+and the salt (hex), for example
+`keeper/master-wrapped-vek/v1;kdf=argon2id;v=19;m=65536;t=3;p=1;len=32;salt=…`. Editing any stored
+setting therefore makes unwrapping fail, rather than quietly deriving a different key.
+
+**Unlock** rejects an unknown schema version or algorithm, validates the KDF settings against
+section 1.1 before running Argon2id, then tries to decrypt. A wrong password, tampered metadata
+and unsupported settings all return the same "couldn't unlock" result.
+
+**Storage:** for now `InMemoryVaultMetadataStore`, so the vault still disappears when the app
+process ends. The encrypted storage phase replaces it with a Room table.
+
+### 2.3 Vault session
+
+`VaultSession` is the only holder of the VEK while unlocked. Code reads it only inside
+`withKey { }`; outside a session that call throws `VaultLockedException`. Locking calls `close()`,
+which overwrites the key array. The key is never put in UI state, saved state, navigation
+arguments or logs.
+
+### 2.4 Threading
+
+Create and unlock each run Argon2id once, on `Dispatchers.Default`, never the main thread. A
+mutex makes sure repeated taps can't start two runs at once. While the app checks stored data at
+start-up, the vault state is `Loading` and a blank screen is shown.

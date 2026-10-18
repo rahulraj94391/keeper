@@ -71,13 +71,14 @@ fun KeeperNavHost(
 
 private fun entryRouteFor(state: VaultState): Any = when (state) {
     VaultState.NoVault -> SetupRoute
-    VaultState.Locked -> UnlockRoute
+    // MainActivity doesn't show the graph while loading; if it ever did, stay locked.
+    VaultState.Loading, VaultState.Locked -> UnlockRoute
     VaultState.Unlocked -> VaultListRoute
 }
 
 private fun NavDestination.belongsTo(state: VaultState): Boolean = when (state) {
     VaultState.NoVault -> hasRoute<SetupRoute>()
-    VaultState.Locked -> hasRoute<UnlockRoute>()
+    VaultState.Loading, VaultState.Locked -> hasRoute<UnlockRoute>()
     VaultState.Unlocked ->
         hasRoute<VaultListRoute>() || hasRoute<CredentialDetailRoute>() ||
             hasRoute<CredentialEditRoute>() || hasRoute<SettingsRoute>()

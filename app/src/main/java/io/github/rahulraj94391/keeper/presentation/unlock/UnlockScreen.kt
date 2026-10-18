@@ -49,7 +49,11 @@ private fun UnlockContent(
     onUnlock: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // The field is disabled while unlocking, which drops focus; put it back after a failed
+    // attempt so the user can type again straight away.
+    LaunchedEffect(uiState.isUnlocking) {
+        if (!uiState.isUnlocking) focusRequester.requestFocus()
+    }
 
     Scaffold { innerPadding ->
         Column(
