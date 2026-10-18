@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.BuildConfig
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.debug.SampleCredentials
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptText
 import io.github.rahulraj94391.keeper.presentation.common.MasterPasswordField
@@ -84,6 +85,8 @@ fun SettingsScreen(
             onBiometricMessageShown = viewModel::onBiometricMessageShown,
             onAutoLock = viewModel::onAutoLockClick,
             onAutoLockSelected = viewModel::onAutoLockSelected,
+            onAddSamples = viewModel::addSampleLogins,
+            onSamplesAddedShown = viewModel::onSamplesAddedShown,
             onLockNow = viewModel::lockNow,
             onExport = viewModel::onExportClick,
             onRestore = viewModel::onRestoreClick,
@@ -105,6 +108,8 @@ private class SettingsActions(
     val onBiometricMessageShown: () -> Unit,
     val onAutoLock: () -> Unit,
     val onAutoLockSelected: (AutoLockTimeout) -> Unit,
+    val onAddSamples: () -> Unit,
+    val onSamplesAddedShown: () -> Unit,
     val onLockNow: () -> Unit,
     val onExport: () -> Unit,
     val onRestore: () -> Unit,
@@ -128,6 +133,11 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
             snackbarHostState.showSnackbar(resources.getString(R.string.settings_backup_unavailable))
             actions.onBackupUnavailableShown()
         }
+    }
+    LaunchedEffect(uiState.samplesAdded) {
+        val count = uiState.samplesAdded ?: return@LaunchedEffect
+        actions.onSamplesAddedShown()
+        snackbarHostState.showSnackbar(resources.getQuantityString(R.plurals.settings_samples_added, count, count))
     }
     LaunchedEffect(uiState.biometricMessage) {
         val message = uiState.biometricMessage ?: return@LaunchedEffect
@@ -175,6 +185,18 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
             SectionHeader(R.string.settings_section_backup)
             SettingsRow(R.string.settings_export, R.string.settings_export_summary, actions.onExport)
             SettingsRow(R.string.settings_restore, R.string.settings_restore_summary, actions.onRestore)
+
+            if (SampleCredentials.AVAILABLE) {
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                SectionHeader(R.string.settings_section_developer)
+                ListItem(
+                    headlineContent = {
+                        Text(pluralStringResource(R.plurals.settings_add_samples, SampleCredentials.COUNT, SampleCredentials.COUNT))
+                    },
+                    supportingContent = { Text(stringResource(R.string.settings_add_samples_summary)) },
+                    modifier = Modifier.clickable(onClick = actions.onAddSamples),
+                )
+            }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionHeader(R.string.settings_section_about)
@@ -379,7 +401,7 @@ private fun SettingsPreview() {
     KeeperTheme(dynamicColor = false) {
         SettingsContent(
             uiState = SettingsUiState(),
-            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
+            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
         )
     }
 }

@@ -4,8 +4,10 @@ import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.data.repository.InMemoryCredentialRepository
 import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +22,7 @@ class SettingsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authenticator = testAuthenticator()
-    private val viewModel by lazy { SettingsViewModel(authenticator, { BiometricAvailability.Available }, FakeAutoLockPreferences()) }
+    private val viewModel by lazy { SettingsViewModel(authenticator, { BiometricAvailability.Available }, FakeAutoLockPreferences(), InMemoryCredentialRepository()) }
 
     @Test
     fun lockNow_locksTheVault() = runTest {
@@ -85,7 +87,7 @@ class SettingsViewModelTest {
     @Test
     fun autoLock_choiceIsSavedAndShown() {
         val preferences = FakeAutoLockPreferences()
-        val viewModel = SettingsViewModel(authenticator, { BiometricAvailability.Available }, preferences)
+        val viewModel = SettingsViewModel(authenticator, { BiometricAvailability.Available }, preferences, InMemoryCredentialRepository())
         assertEquals(AutoLockTimeout.Immediately, viewModel.uiState.autoLockTimeout)
 
         viewModel.onAutoLockClick()
@@ -95,5 +97,19 @@ class SettingsViewModelTest {
         assertEquals(AutoLockTimeout.OneMinute, preferences.timeout.value)
         assertEquals(AutoLockTimeout.OneMinute, viewModel.uiState.autoLockTimeout)
         assertNull(viewModel.uiState.dialog)
+    }
+
+    @Test
+    fun addSampleLogins_savesFortyAndRunningAgainReplacesThem() = runTest {
+        val repository = InMemoryCredentialRepository()
+        val viewModel = SettingsViewModel(
+            authenticator, { BiometricAvailability.Available }, FakeAutoLockPreferences(), repository,
+        )
+
+        viewModel.addSampleLogins()
+        viewModel.addSampleLogins()
+
+        assertEquals(40, repository.observeAll().first().size)
+        assertEquals(40, viewModel.uiState.samplesAdded)
     }
 }

@@ -126,6 +126,16 @@
     <string name="settings_export_summary">Save your vault to a file protected by a separate backup passphrase</string>
     <string name="settings_restore">Restore from backup</string>
     <string name="settings_restore_summary">Replace this vault with the logins from a backup file</string>
+    <string name="settings_section_developer">Developer</string>
+    <plurals name="settings_add_samples">
+        <item quantity="one">Add %1$d sample login</item>
+        <item quantity="other">Add %1$d sample logins</item>
+    </plurals>
+    <string name="settings_add_samples_summary">Debug builds only. Fake accounts; running it again replaces them.</string>
+    <plurals name="settings_samples_added">
+        <item quantity="one">Added %1$d sample login</item>
+        <item quantity="other">Added %1$d sample logins</item>
+    </plurals>
     <string name="settings_limitations">Security and limitations</string>
     <string name="settings_limitations_summary">What Keeper protects against, and what it can’t</string>
     <string name="settings_version">Version</string>

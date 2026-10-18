@@ -8,10 +8,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.rahulraj94391.keeper.debug.SampleCredentials
 import io.github.rahulraj94391.keeper.di.appContainer
 import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.repository.AutoLockPreferences
+import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
 import kotlinx.coroutines.launch
@@ -43,6 +45,8 @@ data class SettingsUiState(
     val biometricMessage: BiometricSettingsMessage? = null,
     val dialog: SettingsDialog? = null,
     val backupForm: BackupPassphraseForm = BackupPassphraseForm(),
+    /** Set after sample logins were added, until the screen has said so. */
+    val samplesAdded: Int? = null,
     /** True after a backup flow ends, until the screen has told the user it isn't available yet. */
     val showBackupUnavailable: Boolean = false,
 )
@@ -51,6 +55,7 @@ class SettingsViewModel(
     private val authenticator: VaultAuthenticator,
     private val biometricAvailability: () -> BiometricAvailability,
     private val autoLockPreferences: AutoLockPreferences,
+    private val credentialRepository: CredentialRepository,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(SettingsUiState(biometricAvailability = biometricAvailability()))
@@ -63,6 +68,20 @@ class SettingsViewModel(
         viewModelScope.launch {
             autoLockPreferences.timeout.collect { uiState = uiState.copy(autoLockTimeout = it) }
         }
+    }
+
+    /** Debug builds only: saves the fake sample logins through the normal encrypted path. */
+    fun addSampleLogins() {
+        if (!SampleCredentials.AVAILABLE) return
+        viewModelScope.launch {
+            val samples = SampleCredentials.all()
+            samples.forEach { credentialRepository.save(it) }
+            uiState = uiState.copy(samplesAdded = samples.size)
+        }
+    }
+
+    fun onSamplesAddedShown() {
+        uiState = uiState.copy(samplesAdded = null)
     }
 
     fun onAutoLockClick() = openDialog(SettingsDialog.AutoLock)
@@ -184,6 +203,7 @@ class SettingsViewModel(
                     container.vaultAuthenticator,
                     container.biometricAvailability::check,
                     container.autoLockPreferences,
+                    container.credentialRepository,
                 )
             }
         }
