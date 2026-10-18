@@ -139,7 +139,22 @@
     <string name="settings_limitations">Security and limitations</string>
     <string name="settings_limitations_summary">What Keeper protects against, and what it can’t</string>
     <string name="settings_version">Version</string>
-    <string name="settings_backup_unavailable">Nothing was exported or restored. Encrypted backup arrives in a later update.</string>
+    <plurals name="backup_exported">
+        <item quantity="one">Backup saved with %1$d login</item>
+        <item quantity="other">Backup saved with %1$d logins</item>
+    </plurals>
+    <string name="backup_export_failed">Couldn’t save the backup. Nothing was saved.</string>
+    <plurals name="backup_restored">
+        <item quantity="one">Restored %1$d login</item>
+        <item quantity="other">Restored %1$d logins</item>
+    </plurals>
+    <string name="backup_wrong_passphrase">Couldn’t open the backup. Check the passphrase. Your vault wasn’t changed.</string>
+    <string name="backup_not_a_backup">That file isn’t a Keeper backup, or it’s damaged. Your vault wasn’t changed.</string>
+    <string name="backup_unsupported">This backup was made by a newer or different version of Keeper. Your vault wasn’t changed.</string>
+    <string name="backup_too_large">That file is too large to be a Keeper backup. Your vault wasn’t changed.</string>
+    <string name="backup_restore_failed">Couldn’t restore the backup. Your vault wasn’t changed.</string>
+    <string name="backup_exporting">Saving encrypted backup…</string>
+    <string name="backup_restoring">Restoring backup…</string>
 
     <!-- Backup dialogs -->
     <string name="backup_export_title">Choose a backup passphrase</string>
@@ -157,6 +172,6 @@
     <string name="backup_error_mismatch">Passphrases don’t match</string>
 
     <!-- Limitations -->
-    <string name="limitations_body">Keeper is a learning project and hasn’t been independently audited.\n\n• Your logins stay on this device. Nothing is sent anywhere unless you export a backup.\n• Keeper can’t protect you if the device is rooted or has malware, or from someone watching your screen.\n• If someone copies the vault file, a weak master password can be guessed. Use a long one.\n• If you forget your master password, your vault can’t be recovered.\n\nThis build is a preview that hasn’t had a security review. Don’t rely on it for real passwords yet.</string>
+    <string name="limitations_body">Keeper is a learning project and hasn’t been independently audited.\n\n• Your logins stay on this device. Nothing is sent anywhere unless you export a backup.\n• Keeper can’t protect you if the device is rooted or has malware, or from someone watching your screen.\n• If someone copies the vault file, a weak master password can be guessed. Use a long one.\n• If you forget your master password, your vault can’t be recovered.\n• A backup file is only as safe as its passphrase. Store it somewhere you trust.\n\nThis build is a preview that hasn’t had a security review. Don’t rely on it for real passwords yet.</string>
     <string name="action_ok">OK</string>
 </resources>

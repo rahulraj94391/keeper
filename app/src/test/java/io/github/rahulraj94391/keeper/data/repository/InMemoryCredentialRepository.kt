@@ -29,6 +29,10 @@ class InMemoryCredentialRepository(
         credentials.update { it + (credential.id to credential) }
     }
 
+    override suspend fun replaceAll(credentials: List<Credential>) {
+        this.credentials.value = credentials.associateBy { it.id }
+    }
+
     override suspend fun delete(id: String) {
         credentials.update { it - id }
     }

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -31,4 +32,17 @@ interface CredentialDao {
 
     @Query("DELETE FROM credentials WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("DELETE FROM credentials")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(credentials: List<CredentialEntity>)
+
+    /** Room runs this in a single transaction: a failure part-way rolls everything back. */
+    @Transaction
+    suspend fun replaceAll(credentials: List<CredentialEntity>) {
+        deleteAll()
+        upsertAll(credentials)
+    }
 }

@@ -65,13 +65,13 @@ class AutoLockControllerTest {
     fun biometricPrompt_doesNotStartTheTimer() = runTest {
         val controller = unlockedController()
 
-        controller.onSystemAuthStarted()
+        controller.onSystemUiStarted()
         controller.onAppBackgrounded() // some devices stop the activity behind the prompt
         advanceSeconds(120)
         assertEquals(VaultState.Unlocked, authenticator.state.value)
 
         controller.onAppForegrounded()
-        controller.onSystemAuthFinished()
+        controller.onSystemUiFinished()
         advanceSeconds(120)
         assertEquals(VaultState.Unlocked, authenticator.state.value)
     }
@@ -80,10 +80,10 @@ class AutoLockControllerTest {
     fun leavingTheAppDuringAPrompt_countsFromWhenThePromptEnds() = runTest {
         val controller = unlockedController()
 
-        controller.onSystemAuthStarted()
+        controller.onSystemUiStarted()
         controller.onAppBackgrounded()
         advanceSeconds(10)
-        controller.onSystemAuthFinished() // e.g. cancelled because the user switched apps
+        controller.onSystemUiFinished() // e.g. cancelled because the user switched apps
 
         advanceSeconds(29)
         assertEquals(VaultState.Unlocked, authenticator.state.value)
@@ -95,7 +95,7 @@ class AutoLockControllerTest {
     fun screenOff_locksEvenDuringAPrompt() = runTest {
         val controller = unlockedController()
 
-        controller.onSystemAuthStarted()
+        controller.onSystemUiStarted()
         controller.onScreenOff()
 
         assertEquals(VaultState.Locked, authenticator.state.value)
@@ -116,11 +116,11 @@ class AutoLockControllerTest {
         preferences.setTimeout(AutoLockTimeout.Immediately)
         val controller = unlockedController()
 
-        controller.onSystemAuthStarted()
+        controller.onSystemUiStarted()
         controller.onAppBackgrounded()
         assertEquals(VaultState.Unlocked, authenticator.state.value)
 
-        controller.onSystemAuthFinished() // prompt closed while the app was still away
+        controller.onSystemUiFinished() // prompt closed while the app was still away
         assertEquals(VaultState.Locked, authenticator.state.value)
     }
 

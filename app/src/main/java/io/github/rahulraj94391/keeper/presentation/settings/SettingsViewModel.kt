@@ -8,6 +8,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.rahulraj94391.keeper.data.backup.ExportResult
+import io.github.rahulraj94391.keeper.data.backup.RestoreResult
+import io.github.rahulraj94391.keeper.data.backup.VaultBackupService
 import io.github.rahulraj94391.keeper.debug.SampleCredentials
 import io.github.rahulraj94391.keeper.di.appContainer
 import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
@@ -16,8 +19,10 @@ import io.github.rahulraj94391.keeper.domain.repository.AutoLockPreferences
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
+import io.github.rahulraj94391.keeper.security.BackupCrypto
 import kotlinx.coroutines.launch
 import java.security.GeneralSecurityException
+import java.time.LocalDate
 import javax.crypto.Cipher
 
 enum class SettingsDialog { AutoLock, ExportPassphrase, RestoreConfirm, RestorePassphrase, Limitations }
@@ -36,6 +41,19 @@ data class BackupPassphraseForm(
 
 enum class BiometricSettingsMessage { Enabled, EnableFailed, Lockout }
 
+enum class BackupWork { Exporting, Restoring }
+
+sealed interface BackupMessage {
+    data class Exported(val count: Int) : BackupMessage
+    data object ExportFailed : BackupMessage
+    data class Restored(val count: Int) : BackupMessage
+    data object WrongPassphraseOrDamaged : BackupMessage
+    data object NotABackup : BackupMessage
+    data object Unsupported : BackupMessage
+    data object TooLarge : BackupMessage
+    data object RestoreFailed : BackupMessage
+}
+
 data class SettingsUiState(
     val autoLockTimeout: AutoLockTimeout = AutoLockTimeout.DEFAULT,
     val biometricEnabled: Boolean = false,
@@ -47,8 +65,12 @@ data class SettingsUiState(
     val backupForm: BackupPassphraseForm = BackupPassphraseForm(),
     /** Set after sample logins were added, until the screen has said so. */
     val samplesAdded: Int? = null,
-    /** True after a backup flow ends, until the screen has told the user it isn't available yet. */
-    val showBackupUnavailable: Boolean = false,
+    /** Asks the screen to open the system "save" picker, suggesting this file name. */
+    val exportPickerRequest: String? = null,
+    /** Asks the screen to open the system "open" picker for a backup file. */
+    val restorePickerRequest: Boolean = false,
+    val backupWork: BackupWork? = null,
+    val backupMessage: BackupMessage? = null,
 )
 
 class SettingsViewModel(
@@ -56,10 +78,16 @@ class SettingsViewModel(
     private val biometricAvailability: () -> BiometricAvailability,
     private val autoLockPreferences: AutoLockPreferences,
     private val credentialRepository: CredentialRepository,
+    private val backupService: VaultBackupService,
+    private val today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(SettingsUiState(biometricAvailability = biometricAvailability()))
         private set
+
+    // Held only between the passphrase dialog and the system picker; wiped right after use.
+    private var exportPassphrase: CharArray? = null
+    private var restoreUri: String? = null
 
     init {
         viewModelScope.launch {
@@ -140,10 +168,10 @@ class SettingsViewModel(
 
     fun onExportClick() = openDialog(SettingsDialog.ExportPassphrase)
     fun onRestoreClick() = openDialog(SettingsDialog.RestoreConfirm)
-    fun onRestoreConfirmed() = openDialog(SettingsDialog.RestorePassphrase)
     fun onLimitationsClick() = openDialog(SettingsDialog.Limitations)
 
     fun dismissDialog() {
+        if (uiState.dialog == SettingsDialog.RestorePassphrase) restoreUri = null
         uiState = uiState.copy(dialog = null, backupForm = BackupPassphraseForm())
     }
 
@@ -155,6 +183,7 @@ class SettingsViewModel(
         uiState = uiState.copy(backupForm = uiState.backupForm.copy(confirmation = value, confirmationError = null))
     }
 
+    /** Export step 1: a valid passphrase, then ask where to save. */
     fun submitExport() {
         val form = uiState.backupForm
         val length = form.passphrase.codePointCount(0, form.passphrase.length)
@@ -166,26 +195,98 @@ class SettingsViewModel(
             uiState = uiState.copy(backupForm = checked)
             return
         }
-        finishBackupFlow()
+        exportPassphrase?.fill('\u0000')
+        exportPassphrase = form.passphrase.toCharArray()
+        uiState = uiState.copy(
+            dialog = null,
+            backupForm = BackupPassphraseForm(),
+            exportPickerRequest = "keeper-backup-${today()}.${BackupCrypto.FILE_EXTENSION}",
+        )
     }
 
+    fun onExportPickerShown() {
+        uiState = uiState.copy(exportPickerRequest = null)
+    }
+
+    /** Export step 2: the picker returned a document, or null if the user cancelled. */
+    fun onExportDestination(uri: String?) {
+        val passphrase = exportPassphrase ?: return
+        exportPassphrase = null
+        if (uri == null) {
+            passphrase.fill('\u0000')
+            return
+        }
+        uiState = uiState.copy(backupWork = BackupWork.Exporting)
+        viewModelScope.launch {
+            val result = try {
+                backupService.export(uri, passphrase)
+            } finally {
+                passphrase.fill('\u0000')
+            }
+            uiState = uiState.copy(
+                backupWork = null,
+                backupMessage = when (result) {
+                    is ExportResult.Saved -> BackupMessage.Exported(result.count)
+                    ExportResult.Failed -> BackupMessage.ExportFailed
+                },
+            )
+        }
+    }
+
+    /** Restore step 1 confirmed: pick the file. */
+    fun onRestoreConfirmed() {
+        uiState = uiState.copy(dialog = null, restorePickerRequest = true)
+    }
+
+    fun onRestorePickerShown() {
+        uiState = uiState.copy(restorePickerRequest = false)
+    }
+
+    /** Restore step 2: the picked file, or null if the user cancelled. */
+    fun onRestoreSource(uri: String?) {
+        if (uri == null) return
+        restoreUri = uri
+        openDialog(SettingsDialog.RestorePassphrase)
+    }
+
+    /** Restore step 3: decrypt, validate, then replace the vault's logins. */
     fun submitRestore() {
         val form = uiState.backupForm
         if (form.passphrase.isEmpty()) {
             uiState = uiState.copy(backupForm = form.copy(passphraseError = PassphraseError.Required))
             return
         }
-        finishBackupFlow()
+        val uri = restoreUri ?: return
+        restoreUri = null
+        val passphrase = form.passphrase.toCharArray()
+        uiState = uiState.copy(dialog = null, backupForm = BackupPassphraseForm(), backupWork = BackupWork.Restoring)
+        viewModelScope.launch {
+            val result = try {
+                backupService.restore(uri, passphrase)
+            } finally {
+                passphrase.fill('\u0000')
+            }
+            uiState = uiState.copy(
+                backupWork = null,
+                backupMessage = when (result) {
+                    is RestoreResult.Restored -> BackupMessage.Restored(result.count)
+                    RestoreResult.WrongPassphraseOrDamaged -> BackupMessage.WrongPassphraseOrDamaged
+                    RestoreResult.NotABackup -> BackupMessage.NotABackup
+                    RestoreResult.Unsupported -> BackupMessage.Unsupported
+                    RestoreResult.TooLarge -> BackupMessage.TooLarge
+                    RestoreResult.Failed -> BackupMessage.RestoreFailed
+                },
+            )
+        }
     }
 
-    fun onBackupUnavailableShown() {
-        uiState = uiState.copy(showBackupUnavailable = false)
+    fun onBackupMessageShown() {
+        uiState = uiState.copy(backupMessage = null)
     }
 
-    // Export and restore need encrypted storage and the backup format, which come in a later
-    // phase. Until then the flow ends here without touching any file or the vault.
-    private fun finishBackupFlow() {
-        uiState = uiState.copy(dialog = null, backupForm = BackupPassphraseForm(), showBackupUnavailable = true)
+    override fun onCleared() {
+        exportPassphrase?.fill('\u0000')
+        exportPassphrase = null
     }
 
     private fun openDialog(dialog: SettingsDialog) {
@@ -204,6 +305,7 @@ class SettingsViewModel(
                     container.biometricAvailability::check,
                     container.autoLockPreferences,
                     container.credentialRepository,
+                    container.backupService,
                 )
             }
         }

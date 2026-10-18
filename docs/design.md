@@ -288,8 +288,9 @@ Code: `security/AutoLockController.kt`, hooks in `KeeperApplication`.
   would otherwise need an unlock. The setting is stored in `SharedPreferences` (`keeper_settings`,
   not secret, excluded from backup); a missing or unknown value falls back to Immediately.
 - **Screen off:** a runtime `ACTION_SCREEN_OFF` receiver locks immediately, whatever the setting.
-- **BiometricPrompt:** the prompt launcher reports when a prompt opens and closes. While one is
-  open, leaving the foreground does not lock or start the timer. If the user left during the
+- **System screens Keeper opens on purpose** (BiometricPrompt, and the file picker for backup
+  export and restore) report when they open and close. While one is open, leaving the
+  foreground does not lock or start the timer. If the user left during the
   prompt, the setting applies from when the prompt closes (so with Immediately, it locks then).
   Screen-off still locks during a prompt.
   On the Galaxy S21 FE the activity stays `RESUMED` behind the prompt, so the case never
@@ -337,3 +338,97 @@ Code: `security/ClipboardGuard.kt`, `data/AndroidSecretClipboard.kt`.
   - The activity stays `RESUMED` behind BiometricPrompt.
   - Turning the screen off locked the vault; on return the Unlock screen prompted for a
     fingerprint.
+
+## 6. Encrypted backup and restore
+
+Code: `security/BackupCrypto.kt`, `data/backup/`, Settings screen and ViewModel.
+
+### 6.1 File format (version 1)
+
+Binary, all integers big-endian, file extension `.kbak`:
+
+| Field | Bytes | Value |
+|---|---|---|
+| magic | 8 | `KEEPERBK` |
+| format version | 1 | 1 |
+| KDF id | 1 | 1 = Argon2id |
+| KDF version | 1 | 0x13 |
+| memory (KiB) | 4 | default 65,536 |
+| iterations | 4 | default 3 |
+| parallelism | 1 | default 1 |
+| key length | 1 | 32 |
+| salt length, salt | 1 + 16 | random per export |
+| cipher id | 1 | 1 = AES-256-GCM |
+| nonce length, nonce | 1 + 12 | random per export |
+| ciphertext length | 4 | must equal the rest of the file |
+| ciphertext and tag | n + 16 | |
+
+- **Associated data:** every byte from the magic through the cipher id. Changing any header
+  field makes decryption fail; GCM authenticates the nonce itself.
+- **Key:** Argon2id(backup passphrase, salt, header settings). The passphrase goes through the
+  same `MasterPasswordEncoding` (NFC, UTF-8, no trimming) as the master password (PRD 7.2). It
+  is separate from the master password and must be at least 12 characters.
+- **Payload:** strict JSON, `{"format":1,"credentials":[{id,title,username,password,url,notes,favorite}]}`.
+  Unknown or missing fields are rejected.
+- **Not included:** the vault key, the master password wrap, Keystore keys and biometric
+  settings (PRD 6.7).
+- **File name:** `keeper-backup-<date>.kbak`. No service names (PRD 6.7).
+- **Fixture:** `src/test/resources/backup/v1-fixture.kbak` is a frozen version-1 file. Tests
+  check it still decrypts, and that deterministic encoding reproduces it byte for byte, so any
+  accidental format change fails the build. `WriteBackupFixture` explains how to regenerate it
+  deliberately.
+
+### 6.2 Reading a backup (PRD 6.8)
+
+Checks happen in this order, and nothing in the vault changes unless all of them pass:
+
+1. **Size:** files over 50 MiB are rejected. The file is read with a hard cap, so a huge file
+   is never loaded in full.
+2. **Structure:** magic, versions, algorithm ids, a 12-byte nonce, and a ciphertext length that
+   exactly matches the file.
+3. **KDF settings** against the section 1.1 bounds, **before** Argon2id runs.
+4. **Decryption:** a wrong passphrase and a damaged or altered file give the same result.
+5. **Payload:** at most 10,000 records, unique non-blank ids of at most 100 characters, and every
+   field within the same limits as the Add/Edit form. One bad record rejects the whole file.
+
+### 6.3 Export
+
+Passphrase (twice) → system "save" picker (Storage Access Framework) → encrypt in memory →
+write. Only ciphertext is written, and there's no plaintext temporary file. If writing fails,
+the partly written document is deleted where the provider allows it, and the user is told
+nothing was saved. Records that couldn't be decrypted (section 3.3) are not included.
+
+### 6.4 Restore
+
+Confirm "Replace your vault?" → system "open" picker → passphrase → read and validate (6.2) →
+replace all logins in **one Room transaction**. Every record is re-encrypted under this vault's
+own key before the transaction starts, so a failure at any point leaves the vault as it was.
+
+Version 1 supports **replace only**, as the PRD allows. Restoring into an unlocked vault keeps
+its master password, vault key and biometric unlock; only the logins change. On a new phone,
+the user creates a vault first, then restores into it.
+
+### 6.5 Limitations
+
+- The backup is only as strong as its passphrase. Argon2id slows down guessing, but a short or
+  reused passphrase can still be guessed offline by someone who has the file.
+- While the file picker is open the vault stays unlocked, however long that takes. Screen off
+  still locks.
+- Keeper can't control where the user saves the file or who else can read that location.
+
+### 6.6 Tests
+
+- JVM (`BackupCryptoTest`, `VaultBackupServiceTest`, `SettingsViewModelTest`): round trip,
+  empty vault, fresh salt and nonce, wrong passphrase, every header and body byte tampered,
+  truncated, extended, not-a-backup, unknown versions, hostile KDF settings rejected before
+  Argon2id, oversized file, invalid records, frozen fixture, restore into a vault with a
+  different key, export while locked, write failure cleanup, and the Settings flow steps.
+- Instrumented: `EncryptedStorageTest.replaceAll_swapsEveryRowInOneTransaction` against real
+  Room.
+- Real device, 18 October 2026, Galaxy S21 FE:
+  - All 11 instrumented tests pass.
+  - Exported 40 logins to Downloads (7,242 bytes) through the system picker; the vault stayed
+    unlocked with auto-lock on Immediately. The file's header was as specified, and it contained
+    no titles, usernames, domains or passphrases.
+  - Deleted one login, then restoring with a wrong passphrase left the vault unchanged at 39.
+  - Restoring with the right passphrase brought it back to 40, including the deleted login.

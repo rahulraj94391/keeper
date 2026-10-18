@@ -8,6 +8,8 @@ import io.github.rahulraj94391.keeper.KeeperApplication
 import io.github.rahulraj94391.keeper.data.AndroidSecretClipboard
 import io.github.rahulraj94391.keeper.data.SharedPrefsAutoLockPreferences
 import io.github.rahulraj94391.keeper.data.auth.BiometricAvailabilityChecker
+import io.github.rahulraj94391.keeper.data.backup.ContentResolverBackupFiles
+import io.github.rahulraj94391.keeper.data.backup.VaultBackupService
 import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
 import io.github.rahulraj94391.keeper.data.local.KeeperDatabase
 import io.github.rahulraj94391.keeper.data.repository.EncryptedCredentialRepository
@@ -59,6 +61,13 @@ class AppContainer(context: Context) {
 
     val credentialRepository: CredentialRepository =
         EncryptedCredentialRepository(database.credentialDao(), vaultSession)
+
+    // Declared after the repository it uses: properties initialize top to bottom.
+    val backupService = VaultBackupService(
+        repository = credentialRepository,
+        session = vaultSession,
+        files = ContentResolverBackupFiles(context),
+    )
 }
 
 /** Looks up the app container from inside a `viewModelFactory { initializer { ... } }` block. */

@@ -56,6 +56,13 @@ class EncryptedCredentialRepository(
         dao.delete(id)
     }
 
+    override suspend fun replaceAll(credentials: List<Credential>) {
+        // Encrypt everything first, so a failure leaves the database untouched; then swap in
+        // one transaction (PRD 6.8).
+        val entities = withContext(dispatcher) { credentials.map(::encrypt) }
+        dao.replaceAll(entities)
+    }
+
     private fun encrypt(credential: Credential): CredentialEntity {
         val schema = CredentialPayloadCodec.SCHEMA_VERSION
         val plaintext = CredentialPayloadCodec.encode(credential)

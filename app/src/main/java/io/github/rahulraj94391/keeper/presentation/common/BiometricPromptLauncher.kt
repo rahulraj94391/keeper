@@ -39,7 +39,7 @@ fun rememberBiometricPrompt(onResult: (BiometricPromptResult) -> Unit): (Biometr
     val autoLock = (activity.application as KeeperApplication).container.autoLock
     // Every result ends the prompt, so auto-lock goes back to normal before the caller reacts.
     val currentOnResult by rememberUpdatedState<(BiometricPromptResult) -> Unit> { result ->
-        autoLock.onSystemAuthFinished()
+        autoLock.onSystemUiFinished()
         onResult(result)
     }
 
@@ -78,7 +78,7 @@ fun rememberBiometricPrompt(onResult: (BiometricPromptResult) -> Unit): (Biometr
                 .setNegativeButtonText(text.negativeButton)
                 .setAllowedAuthenticators(BIOMETRIC_STRONG)
                 .build()
-            autoLock.onSystemAuthStarted()
+            autoLock.onSystemUiStarted()
             prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
         }
     }

@@ -105,4 +105,24 @@ class EncryptedCredentialRepositoryTest {
     }
 
     private fun randomKey() = ByteArray(32).also(SecureRandom()::nextBytes)
+
+    @Test
+    fun replaceAll_swapsEveryRecord() = runTest {
+        repository.save(testCredential("old-1"))
+        repository.save(testCredential("old-2"))
+
+        repository.replaceAll(listOf(testCredential("new-1"), testCredential("new-2"), testCredential("new-3")))
+
+        assertEquals(listOf("new-1", "new-2", "new-3"), repository.observeAll().first().map { it.id }.sorted())
+    }
+
+    @Test
+    fun replaceAll_whenLocked_changesNothing() = runTest {
+        repository.save(testCredential("old-1"))
+        val before = dao.rows.value
+        session.close()
+
+        assertTrue(runCatching { repository.replaceAll(listOf(testCredential("new-1"))) }.exceptionOrNull() is VaultLockedException)
+        assertEquals(before, dao.rows.value)
+    }
 }

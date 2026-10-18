@@ -1,5 +1,7 @@
 package io.github.rahulraj94391.keeper.presentation.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,7 +19,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -45,12 +51,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.BuildConfig
+import io.github.rahulraj94391.keeper.KeeperApplication
 import io.github.rahulraj94391.keeper.R
 import io.github.rahulraj94391.keeper.debug.SampleCredentials
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptText
 import io.github.rahulraj94391.keeper.presentation.common.MasterPasswordField
 import io.github.rahulraj94391.keeper.presentation.common.rememberBiometricPrompt
+import io.github.rahulraj94391.keeper.security.BackupCrypto
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 
 @Composable
@@ -72,6 +80,32 @@ fun SettingsScreen(
         }
     }
     // The user may have just enrolled a fingerprint in system settings.
+    // System file pickers send Keeper to the background; exempt them from auto-lock (PRD 6.6).
+    val autoLock = (LocalContext.current.applicationContext as KeeperApplication).container.autoLock
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BackupCrypto.MIME_TYPE),
+    ) { uri ->
+        autoLock.onSystemUiFinished()
+        viewModel.onExportDestination(uri?.toString())
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        autoLock.onSystemUiFinished()
+        viewModel.onRestoreSource(uri?.toString())
+    }
+    LaunchedEffect(uiState.exportPickerRequest) {
+        val fileName = uiState.exportPickerRequest ?: return@LaunchedEffect
+        viewModel.onExportPickerShown()
+        autoLock.onSystemUiStarted()
+        exportPicker.launch(fileName)
+    }
+    LaunchedEffect(uiState.restorePickerRequest) {
+        if (!uiState.restorePickerRequest) return@LaunchedEffect
+        viewModel.onRestorePickerShown()
+        autoLock.onSystemUiStarted()
+        // Backups have no registered MIME type, so show all files.
+        restorePicker.launch(arrayOf("*/*"))
+    }
+
     LifecycleResumeEffect(Unit) {
         viewModel.refreshBiometricAvailability()
         onPauseOrDispose { }
@@ -97,7 +131,7 @@ fun SettingsScreen(
             onConfirmationChange = viewModel::onConfirmationChange,
             onSubmitExport = viewModel::submitExport,
             onSubmitRestore = viewModel::submitRestore,
-            onBackupUnavailableShown = viewModel::onBackupUnavailableShown,
+            onBackupMessageShown = viewModel::onBackupMessageShown,
         ),
     )
 }
@@ -120,7 +154,7 @@ private class SettingsActions(
     val onConfirmationChange: (String) -> Unit,
     val onSubmitExport: () -> Unit,
     val onSubmitRestore: () -> Unit,
-    val onBackupUnavailableShown: () -> Unit,
+    val onBackupMessageShown: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,11 +162,24 @@ private class SettingsActions(
 private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) {
     val snackbarHostState = remember { SnackbarHostState() }
     val resources = LocalResources.current
-    LaunchedEffect(uiState.showBackupUnavailable) {
-        if (uiState.showBackupUnavailable) {
-            snackbarHostState.showSnackbar(resources.getString(R.string.settings_backup_unavailable))
-            actions.onBackupUnavailableShown()
-        }
+    LaunchedEffect(uiState.backupMessage) {
+        val message = uiState.backupMessage ?: return@LaunchedEffect
+        actions.onBackupMessageShown()
+        snackbarHostState.showSnackbar(
+            when (message) {
+                is BackupMessage.Exported ->
+                    resources.getQuantityString(R.plurals.backup_exported, message.count, message.count)
+                is BackupMessage.Restored ->
+                    resources.getQuantityString(R.plurals.backup_restored, message.count, message.count)
+                BackupMessage.ExportFailed -> resources.getString(R.string.backup_export_failed)
+                BackupMessage.WrongPassphraseOrDamaged -> resources.getString(R.string.backup_wrong_passphrase)
+                BackupMessage.NotABackup -> resources.getString(R.string.backup_not_a_backup)
+                BackupMessage.Unsupported -> resources.getString(R.string.backup_unsupported)
+                BackupMessage.TooLarge -> resources.getString(R.string.backup_too_large)
+                BackupMessage.RestoreFailed -> resources.getString(R.string.backup_restore_failed)
+            },
+            duration = SnackbarDuration.Long,
+        )
     }
     LaunchedEffect(uiState.samplesAdded) {
         val count = uiState.samplesAdded ?: return@LaunchedEffect
@@ -208,6 +255,8 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
         }
     }
 
+    uiState.backupWork?.let { BackupProgressDialog(it) }
+
     when (uiState.dialog) {
         SettingsDialog.AutoLock -> AutoLockDialog(uiState.autoLockTimeout, actions)
         SettingsDialog.ExportPassphrase -> ExportPassphraseDialog(uiState.backupForm, actions)
@@ -238,6 +287,28 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
         )
         null -> Unit
     }
+}
+
+@Composable
+private fun BackupProgressDialog(work: BackupWork) {
+    AlertDialog(
+        onDismissRequest = {}, // Can't be dismissed while working.
+        confirmButton = {},
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                Text(
+                    stringResource(
+                        when (work) {
+                            BackupWork.Exporting -> R.string.backup_exporting
+                            BackupWork.Restoring -> R.string.backup_restoring
+                        }
+                    ),
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+            }
+        },
+    )
 }
 
 @Composable

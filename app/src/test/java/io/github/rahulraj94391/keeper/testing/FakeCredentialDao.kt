@@ -16,4 +16,10 @@ class FakeCredentialDao : CredentialDao {
     override suspend fun get(id: String): CredentialEntity? = rows.value[id]
     override suspend fun upsert(credential: CredentialEntity) = rows.update { it + (credential.id to credential) }
     override suspend fun delete(id: String) = rows.update { it - id }
+    override suspend fun deleteAll() = rows.update { emptyMap() }
+    override suspend fun upsertAll(credentials: List<CredentialEntity>) =
+        rows.update { it + credentials.associateBy { c -> c.id } }
+    override suspend fun replaceAll(credentials: List<CredentialEntity>) {
+        rows.value = credentials.associateBy { it.id }
+    }
 }

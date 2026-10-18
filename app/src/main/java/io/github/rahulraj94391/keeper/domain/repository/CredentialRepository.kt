@@ -16,4 +16,10 @@ interface CredentialRepository {
     suspend fun save(credential: Credential)
 
     suspend fun delete(id: String)
+
+    /**
+     * Replaces every credential with [credentials] in one step (backup restore). Either all of
+     * them end up stored or nothing changes.
+     */
+    suspend fun replaceAll(credentials: List<Credential>)
 }

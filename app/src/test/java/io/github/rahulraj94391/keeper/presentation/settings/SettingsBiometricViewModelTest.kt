@@ -2,10 +2,9 @@ package io.github.rahulraj94391.keeper.presentation.settings
 
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
-import io.github.rahulraj94391.keeper.data.repository.InMemoryCredentialRepository
-import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
+import io.github.rahulraj94391.keeper.testing.testSettingsViewModel
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +26,7 @@ class SettingsBiometricViewModelTest {
     @Before
     fun setUp() = runTest {
         authenticator.createVault("fake master password".toCharArray())
-        viewModel = SettingsViewModel(authenticator, { availability }, FakeAutoLockPreferences(), InMemoryCredentialRepository())
+        viewModel = testSettingsViewModel(authenticator, { availability })
     }
 
     @Test

@@ -121,4 +121,20 @@ class EncryptedStorageTest {
 
         assertNull(db.credentialDao().get("rec-1"))
     }
+
+    @Test
+    fun replaceAll_swapsEveryRowInOneTransaction() = runTest {
+        val session = VaultSession()
+        authenticator(session).createVault(password.toCharArray())
+        val repository = EncryptedCredentialRepository(db.credentialDao(), session)
+        repository.save(credential)
+        repository.save(credential.copy(id = "rec-2", title = "Second"))
+
+        val restored = (1..25).map { credential.copy(id = "restored-$it", title = "Restored $it") }
+        repository.replaceAll(restored)
+
+        val ids = repository.observeAll().first().map { it.id }.toSet()
+        assertEquals(restored.map { it.id }.toSet(), ids)
+        assertNull(db.credentialDao().get("rec-1"))
+    }
 }

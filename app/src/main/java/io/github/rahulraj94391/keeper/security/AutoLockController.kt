@@ -13,9 +13,10 @@ import kotlin.time.Duration
  *   if it doesn't come back first;
  * - immediately when the screen turns off, whatever the setting.
  *
- * The system BiometricPrompt can push the app into the background on some devices. While a
- * prompt Keeper started is showing, leaving the foreground does not start the timer; the
- * prompt itself ends with success, cancel or error, after which normal rules apply.
+ * Some system screens that Keeper opens on purpose push it into the background: the file picker
+ * for backup export/restore always does, and BiometricPrompt does on some devices. While one of
+ * those is showing, leaving the foreground does not lock or start the timer; when it closes,
+ * normal rules apply. Screen off still locks immediately.
  */
 class AutoLockController(
     private val authenticator: VaultAuthenticator,
@@ -24,13 +25,13 @@ class AutoLockController(
     private val backgroundTimeout: () -> Duration,
 ) {
     private var pendingLock: Job? = null
-    private var systemAuthInProgress = false
+    private var systemUiInProgress = false
     private var inBackground = false
 
     /** The whole app went to the background (no activity visible). */
     fun onAppBackgrounded() {
         inBackground = true
-        if (!systemAuthInProgress) scheduleLock()
+        if (!systemUiInProgress) scheduleLock()
     }
 
     /** An app activity is visible again. */
@@ -46,17 +47,17 @@ class AutoLockController(
         authenticator.lock()
     }
 
-    /** Call right before showing BiometricPrompt. */
-    fun onSystemAuthStarted() {
-        systemAuthInProgress = true
+    /** Call right before showing BiometricPrompt or the system file picker. */
+    fun onSystemUiStarted() {
+        systemUiInProgress = true
         pendingLock?.cancel()
         pendingLock = null
     }
 
-    /** Call when BiometricPrompt reports any result. */
-    fun onSystemAuthFinished() {
-        systemAuthInProgress = false
-        // If the user left the app while the prompt was up, start counting from now.
+    /** Call when that system screen returns any result, including cancel. */
+    fun onSystemUiFinished() {
+        systemUiInProgress = false
+        // If the user left the app while the system screen was up, apply the setting from now.
         if (inBackground) scheduleLock()
     }
 
