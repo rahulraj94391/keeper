@@ -43,7 +43,15 @@ fun KeeperNavHost(
     }
 
     // dropUnlessResumed ignores repeat taps that arrive while a transition is already running.
-    NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        modifier = modifier,
+        enterTransition = keeperEnterTransition,
+        exitTransition = keeperExitTransition,
+        popEnterTransition = keeperPopEnterTransition,
+        popExitTransition = keeperPopExitTransition,
+    ) {
         composable<SetupRoute> { SetupScreen() }
         composable<UnlockRoute> { UnlockScreen() }
         composable<VaultListRoute> {
