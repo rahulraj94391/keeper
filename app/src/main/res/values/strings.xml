@@ -125,6 +125,6 @@
     <string name="backup_error_mismatch">Passphrases don’t match</string>
 
     <!-- Limitations -->
-    <string name="limitations_body">Keeper is a learning project and hasn’t been independently audited.\n\n• Your logins stay on this device. Nothing is sent anywhere unless you export a backup.\n• Keeper can’t protect you if the device is rooted or has malware, or from someone watching your screen.\n• If someone copies the vault file, a weak master password can be guessed. Use a long one.\n• If you forget your master password, your vault can’t be recovered.\n\nThis build is a preview: logins are kept in memory without encryption and disappear when the app closes. Don’t save real passwords yet.</string>
+    <string name="limitations_body">Keeper is a learning project and hasn’t been independently audited.\n\n• Your logins stay on this device. Nothing is sent anywhere unless you export a backup.\n• Keeper can’t protect you if the device is rooted or has malware, or from someone watching your screen.\n• If someone copies the vault file, a weak master password can be guessed. Use a long one.\n• If you forget your master password, your vault can’t be recovered.\n\nThis build is a preview that hasn’t had a security review. Don’t rely on it for real passwords yet.</string>
     <string name="action_ok">OK</string>
 </resources>

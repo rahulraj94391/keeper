@@ -16,6 +16,10 @@ data class Credential(
     override fun toString(): String = "Credential(id=$id)"
 }
 
+/** How credentials are listed: favorites first, then by title ignoring case. */
+val CredentialDisplayOrder: Comparator<Credential> =
+    compareByDescending<Credential> { it.favorite }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+
 /** Maximum field lengths, enforced before a credential is saved. */
 object CredentialLimits {
     const val TITLE = 200

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,7 +44,7 @@ class MasterPasswordVaultAuthenticator(
     }
 
     override suspend fun createVault(masterPassword: CharArray) = mutex.withLock {
-        check(_state.value == VaultState.NoVault) { "A vault already exists" }
+        check(awaitLoaded() == VaultState.NoVault) { "A vault can only be created when none exists" }
         val newVault = withContext(cryptoDispatcher) { keyManager.createVault(masterPassword) }
         try {
             // Metadata is saved as one record, so an interrupted setup leaves either a
@@ -58,7 +59,7 @@ class MasterPasswordVaultAuthenticator(
     }
 
     override suspend fun unlock(masterPassword: CharArray): Boolean = mutex.withLock {
-        if (_state.value == VaultState.Unlocked) return true
+        if (awaitLoaded() == VaultState.Unlocked) return true
         val metadata = store.load() ?: return false
         val vek = withContext(cryptoDispatcher) { keyManager.unwrap(masterPassword, metadata) }
             ?: return false
@@ -66,6 +67,9 @@ class MasterPasswordVaultAuthenticator(
         _state.value = VaultState.Unlocked
         true
     }
+
+    /** Waits for the start-up check of stored data, so no call acts on a guess. */
+    private suspend fun awaitLoaded(): VaultState = _state.first { it != VaultState.Loading }
 
     override fun lock() {
         session.close()

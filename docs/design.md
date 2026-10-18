@@ -132,8 +132,7 @@ setting therefore makes unwrapping fail, rather than quietly deriving a differen
 section 1.1 before running Argon2id, then tries to decrypt. A wrong password, tampered metadata
 and unsupported settings all return the same "couldn't unlock" result.
 
-**Storage:** for now `InMemoryVaultMetadataStore`, so the vault still disappears when the app
-process ends. The encrypted storage phase replaces it with a Room table.
+**Storage:** the single row of the Room table `vault_metadata` (section 3).
 
 ### 2.3 Vault session
 
@@ -146,4 +145,53 @@ arguments or logs.
 
 Create and unlock each run Argon2id once, on `Dispatchers.Default`, never the main thread. A
 mutex makes sure repeated taps can't start two runs at once. While the app checks stored data at
-start-up, the vault state is `Loading` and a blank screen is shown.
+start-up, the vault state is `Loading` and a blank screen is shown. Create and unlock wait for
+that check to finish rather than acting on the `Loading` state.
+
+## 3. Encrypted storage (Room)
+
+Code: `data/local/`, `data/vault/RoomVaultMetadataStore.kt`,
+`data/repository/EncryptedCredentialRepository.kt`, `data/repository/CredentialPayloadCodec.kt`.
+
+Database file `keeper_vault.db`, schema version 1. Exported schemas live in `app/schemas/` and are
+committed so later migrations can be written and tested. There is no destructive-migration
+fallback: a failed migration must never wipe the vault. The file is excluded from Android
+backup and device transfer (`data_extraction_rules.xml`).
+
+### 3.1 Tables
+
+| Table | Columns | Readable without the vault key |
+|---|---|---|
+| `vault_metadata` | one row: section 2.2 fields | KDF settings, salt, algorithm names |
+| `credentials` | `id`, `payload_schema_version`, `nonce`, `ciphertext` | the random record id (UUID) only |
+
+No title, username, password, URL or notes are stored in plain columns, and there is no plaintext
+search index. Search runs over records decrypted in memory while the vault is unlocked.
+
+### 3.2 Credential records
+
+- **Payload:** strict JSON `{title, username, password, url, notes, favorite}`, schema version 1.
+  Unknown or missing fields, blank titles, empty passwords and over-limit fields are rejected
+  on read.
+- **Encryption:** AES-256-GCM under the VEK, fresh nonce per save.
+- **Associated data:** `keeper/credential/v1;id=<record id>`, so a ciphertext copied onto another
+  row (or to another schema version) fails to decrypt.
+- **Size bound:** ciphertexts over 64 KiB are rejected before decryption.
+
+### 3.3 Behavior
+
+- **Locked:** reads return an empty list or null; saves and deletes throw `VaultLockedException`.
+- **Corrupted record:** a row that fails to decrypt or validate is left out of the list instead of
+  being shown partly read. The list doesn't yet tell the user that something was skipped.
+- **Deleting** removes the row. SQLite may keep old pages or journal data on flash; the PRD does
+  not promise physical erasure (PRD 3, 6.4).
+- **Limitations:** JSON encoding goes through immutable `String`s, so decrypted text can't be
+  fully wiped from memory; the plaintext byte arrays are wiped after use.
+
+### 3.4 Tests
+
+- JVM: codec round trip and rejection cases; repository with a fake DAO covering round trip, no
+  plaintext in rows, locked behavior, moved/tampered/unsupported rows, wrong vault key.
+- Instrumented (real Room, `EncryptedStorageTest`): vault survives a simulated restart and
+  unlocks only with the right password; a raw dump of the tables contains no plaintext; delete
+  removes the row.

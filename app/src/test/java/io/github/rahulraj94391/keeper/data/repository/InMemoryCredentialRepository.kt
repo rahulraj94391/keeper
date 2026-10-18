@@ -1,6 +1,7 @@
 package io.github.rahulraj94391.keeper.data.repository
 
 import io.github.rahulraj94391.keeper.domain.model.Credential
+import io.github.rahulraj94391.keeper.domain.model.CredentialDisplayOrder
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,10 +9,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
-/**
- * Temporary, unencrypted store used while the UI is built. It keeps data in memory only
- * and is replaced by the encrypted Room repository in a later phase.
- */
+/** Unencrypted in-memory fake for ViewModel tests. */
 class InMemoryCredentialRepository(
     initial: List<Credential> = emptyList(),
 ) : CredentialRepository {
@@ -19,9 +17,7 @@ class InMemoryCredentialRepository(
     private val credentials = MutableStateFlow(initial.associateBy { it.id })
 
     override fun observeAll(): Flow<List<Credential>> = credentials.map { byId ->
-        byId.values.sortedWith(
-            compareByDescending<Credential> { it.favorite }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-        )
+        byId.values.sortedWith(CredentialDisplayOrder)
     }
 
     override fun observe(id: String): Flow<Credential?> =

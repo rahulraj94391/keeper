@@ -1,6 +1,13 @@
 package io.github.rahulraj94391.keeper.data.auth
 
 import io.github.rahulraj94391.keeper.data.vault.InMemoryVaultMetadataStore
+import io.github.rahulraj94391.keeper.data.vault.VaultMetadataStore
+import io.github.rahulraj94391.keeper.security.VaultKeyMetadata
+import io.github.rahulraj94391.keeper.testing.testKeyManager
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.security.VaultSession
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
@@ -90,5 +97,26 @@ class MasterPasswordVaultAuthenticatorTest {
         assertFalse(authenticator.unlock(password.toCharArray()))
         assertNull(store.load())
         assertEquals(VaultState.NoVault, authenticator.state.value)
+    }
+
+    @Test
+    fun createVault_waitsForTheStartupCheck() = runTest {
+        val slowStore = object : VaultMetadataStore by store {
+            val loaded = CompletableDeferred<Unit>()
+            override suspend fun load(): VaultKeyMetadata? {
+                loaded.await()
+                return store.load()
+            }
+        }
+        val authenticator = MasterPasswordVaultAuthenticator(
+            slowStore, testKeyManager(), session, CoroutineScope(Dispatchers.Unconfined), Dispatchers.Unconfined,
+        )
+        assertEquals(VaultState.Loading, authenticator.state.value)
+
+        val creating = async { authenticator.createVault(password.toCharArray()) }
+        slowStore.loaded.complete(Unit)
+        creating.await()
+
+        assertEquals(VaultState.Unlocked, authenticator.state.value)
     }
 }
