@@ -323,12 +323,36 @@ Code: `security/ClipboardGuard.kt`, `data/AndroidSecretClipboard.kt`.
 - Keyboard apps with their own clipboard history (for example Samsung Keyboard or Gboard) may
   keep a copy that Keeper can't see or clear. Whether they honor the sensitive flag is up to them.
 
+### 5.5 Autofill services
+
+Android autofill services (Samsung Pass on Samsung phones, Google, other password managers)
+could otherwise offer to fill or save Keeper's master password, a backup passphrase, or the
+logins typed into the Add/Edit form. That would copy vault secrets into another app.
+
+Keeper turns Compose's autofill integration off for the whole app:
+`ComposeUiFlags.isSemanticAutofillEnabled = false` in `KeeperApplication.onCreate()`, before
+the first composition.
+
+- **Why app-wide:** Compose 1.10 has no per-field opt-out. It treats every text field as
+  autofillable, and neither `semantics { contentDataType = ContentDataType.None }` nor
+  `View.importantForAutofill = NO_EXCLUDE_DESCENDANTS` on the hosting view stops it. All three
+  approaches were tested on the Galaxy S21 FE by counting the requests that reach the autofill
+  service (`adb shell dumpsys autofill`). Only the global flag got that count to zero.
+- **Effect:** no other app can fill or save anything in Keeper. Keeper itself never offered
+  autofill to other apps; that's a non-goal for v1.
+- **Caveat:** the flag is marked experimental. `AutofillDisabledTest` checks it is off at
+  runtime. When updating Compose, check that the flag still exists, or switch to a per-field
+  opt-out if one is added.
+- **Not covered:** keyboard apps may still keep their own history of what was typed. Password
+  fields ask keyboards not to learn, but that's up to the keyboard.
+
 ### 5.4 Tests
 
 - JVM: `AutoLockControllerTest` (each setting, return in time, screen off, prompt suppression
   and timing, setting changes), `SettingsViewModelTest` (choosing a setting), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
   restarts on a new copy).
-- Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window.
+- Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window, and
+  `AutofillDisabledTest` checks Compose autofill is off.
 - Real device, 18 October 2026, Galaxy S21 FE, Android 16:
   - All 10 instrumented tests pass.
   - A screenshot of Keeper is black.
@@ -338,6 +362,9 @@ Code: `security/ClipboardGuard.kt`, `data/AndroidSecretClipboard.kt`.
   - The activity stays `RESUMED` behind BiometricPrompt.
   - Turning the screen off locked the vault; on return the Unlock screen prompted for a
     fingerprint.
+  - Autofill: before the change, opening the Unlock screen sent a request to Samsung Pass and to
+    Samsung's augmented-autofill service. After it, the Unlock screen and the Add login form
+    sent none.
 
 ## 6. Encrypted backup and restore
 
