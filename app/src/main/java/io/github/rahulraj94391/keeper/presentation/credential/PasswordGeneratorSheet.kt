@@ -20,20 +20,16 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.rahulraj94391.keeper.R
-import io.github.rahulraj94391.keeper.presentation.common.sensitiveClipEntry
 import io.github.rahulraj94391.keeper.security.CharacterGroup
 import io.github.rahulraj94391.keeper.security.PasswordGenerator
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 class PasswordGeneratorActions(
@@ -42,6 +38,7 @@ class PasswordGeneratorActions(
     val onRegenerate: () -> Unit,
     val onUse: () -> Unit,
     val onDismiss: () -> Unit,
+    val onCopy: (String) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,8 +54,6 @@ fun PasswordGeneratorSheet(state: GeneratorUiState, actions: PasswordGeneratorAc
 
 @Composable
 private fun PasswordGeneratorContent(state: GeneratorUiState, actions: PasswordGeneratorActions) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
     val passwordLabel = stringResource(R.string.field_password)
     val range = PasswordGenerator.LENGTH_RANGE
 
@@ -88,9 +83,7 @@ private fun PasswordGeneratorContent(state: GeneratorUiState, actions: PasswordG
                 IconButton(onClick = actions.onRegenerate) {
                     Icon(Icons.Filled.Refresh, stringResource(R.string.generator_regenerate))
                 }
-                IconButton(onClick = {
-                    scope.launch { clipboard.setClipEntry(sensitiveClipEntry(passwordLabel, state.password)) }
-                }) {
+                IconButton(onClick = { actions.onCopy(state.password) }) {
                     Icon(
                         painterResource(R.drawable.ic_content_copy),
                         stringResource(R.string.action_copy, passwordLabel),

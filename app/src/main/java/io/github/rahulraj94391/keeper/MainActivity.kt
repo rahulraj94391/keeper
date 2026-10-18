@@ -1,6 +1,7 @@
 package io.github.rahulraj94391.keeper
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,10 @@ import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Blocks screenshots, screen recording and the recent-apps thumbnail (PRD 6.6). Set for
+        // the whole window, not per screen, so no vault screen can slip through during a
+        // transition or at the moment of locking.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
         val authenticator = (application as KeeperApplication).container.vaultAuthenticator
         setContent {
@@ -30,5 +35,11 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Clipboard reads need window focus on Android 10+; the guard re-checks when it returns.
+        (application as KeeperApplication).container.clipboardGuard.onWindowFocusChanged(hasFocus)
     }
 }

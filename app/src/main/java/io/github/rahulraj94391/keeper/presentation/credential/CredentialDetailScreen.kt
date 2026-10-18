@@ -32,7 +32,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -45,7 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.R
 import io.github.rahulraj94391.keeper.domain.model.Credential
 import io.github.rahulraj94391.keeper.presentation.common.PasswordVisibilityToggle
-import io.github.rahulraj94391.keeper.presentation.common.sensitiveClipEntry
+import io.github.rahulraj94391.keeper.presentation.common.rememberSecretCopier
 import io.github.rahulraj94391.keeper.presentation.common.systemShowsCopyConfirmation
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 import kotlinx.coroutines.launch
@@ -68,6 +67,7 @@ fun CredentialDetailScreen(
     val credential = (uiState as? CredentialDetailUiState.Loaded)?.credential
     CredentialDetailContent(
         credential = credential,
+        onCopy = rememberSecretCopier(),
         onBack = onBack,
         onEdit = { credential?.let { onEdit(it.id) } },
         onDelete = viewModel::delete,
@@ -78,20 +78,21 @@ fun CredentialDetailScreen(
 @Composable
 private fun CredentialDetailContent(
     credential: Credential?,
+    onCopy: (label: String, value: String, sensitive: Boolean) -> Unit,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val resources = LocalResources.current
-    val copy: (label: String, value: String) -> Unit = { label, value ->
-        scope.launch {
-            clipboard.setClipEntry(sensitiveClipEntry(label, value))
-            if (!systemShowsCopyConfirmation) snackbarHostState.showSnackbar(resources.getString(R.string.detail_copied, label))
+    // Copies are cleared from the clipboard after about 30 seconds (ClipboardGuard).
+    val copy: (label: String, value: String, sensitive: Boolean) -> Unit = { label, value, sensitive ->
+        onCopy(label, value, sensitive)
+        if (!systemShowsCopyConfirmation) {
+            scope.launch { snackbarHostState.showSnackbar(resources.getString(R.string.detail_copied, label)) }
         }
     }
 
@@ -136,7 +137,7 @@ private fun CredentialDetailContent(
 
             if (credential.username.isNotEmpty()) {
                 DetailField(label = usernameLabel, value = credential.username) {
-                    CopyButton(usernameLabel) { copy(usernameLabel, credential.username) }
+                    CopyButton(usernameLabel) { copy(usernameLabel, credential.username, false) }
                 }
             }
             DetailField(
@@ -145,7 +146,7 @@ private fun CredentialDetailContent(
                 monospace = passwordVisible,
             ) {
                 PasswordVisibilityToggle(passwordVisible) { passwordVisible = !passwordVisible }
-                CopyButton(passwordLabel) { copy(passwordLabel, credential.password) }
+                CopyButton(passwordLabel) { copy(passwordLabel, credential.password, true) }
             }
             if (credential.url.isNotEmpty()) {
                 DetailField(label = stringResource(R.string.field_url), value = credential.url)
@@ -231,6 +232,7 @@ private fun CredentialDetailPreview() {
                 url = "https://mail.example.com",
                 notes = "Preview only.",
             ),
+            onCopy = { _, _, _ -> },
             onBack = {},
             onEdit = {},
             onDelete = {},

@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.R
 import io.github.rahulraj94391.keeper.presentation.common.PasswordVisibilityToggle
+import io.github.rahulraj94391.keeper.presentation.common.rememberSecretCopier
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 
 @Composable
@@ -57,6 +58,9 @@ fun CredentialEditScreen(
     viewModel: CredentialEditViewModel = viewModel(factory = CredentialEditViewModel.Factory),
 ) {
     val uiState = viewModel.uiState
+
+    val copySecret = rememberSecretCopier()
+    val passwordLabel = stringResource(R.string.field_password)
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) onDone()
@@ -81,6 +85,7 @@ fun CredentialEditScreen(
             onRegenerate = viewModel::regeneratePassword,
             onUse = viewModel::useGeneratedPassword,
             onDismiss = viewModel::closeGenerator,
+            onCopy = { password -> copySecret(passwordLabel, password, true) },
         ),
     )
 }
@@ -312,7 +317,7 @@ private fun CredentialEditPreview() {
                 errors = CredentialFormErrors(password = FieldError.Required),
             ),
             actions = CredentialEditActions({}, {}, {}, {}, {}, {}, {}, {}, {}),
-            generatorActions = PasswordGeneratorActions({}, { _, _ -> }, {}, {}, {}),
+            generatorActions = PasswordGeneratorActions({}, { _, _ -> }, {}, {}, {}, {}),
         )
     }
 }

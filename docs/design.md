@@ -264,7 +264,65 @@ a successful prompt result alone never unlocks anything.
 - Not yet tested on a device: invalidation after adding or removing a fingerprint (covered by
   JVM tests and `deletedKey_reportsInvalidated`), and lockout after repeated failed touches.
 
-### 4.5 Known gap
+### 4.5 Prompt and auto-lock
 
-Auto-lock isn't implemented yet. When it is (hardening phase), it must not lock the vault just
-because the system BiometricPrompt is in front of the app (PRD 6.6).
+Auto-lock (section 5.1) must not lock the vault just because the system BiometricPrompt is in
+front of the app (PRD 6.6). See section 5.1 for how that is modeled.
+
+## 5. Hardening
+
+### 5.1 Auto-lock
+
+Code: `security/AutoLockController.kt`, hooks in `KeeperApplication`.
+
+- **Background:** `ProcessLifecycleOwner` reports when no Keeper activity is visible. After
+  30 seconds in the background the vault locks; returning sooner cancels the timer. The timeout
+  isn't user-configurable yet, so it can't be made longer (PRD 6.6).
+- **Screen off:** a runtime `ACTION_SCREEN_OFF` receiver locks immediately.
+- **BiometricPrompt:** the prompt launcher reports when a prompt opens and closes. While one is
+  open, leaving the foreground does not start the timer. If the user left during the prompt,
+  the 30 seconds count from when the prompt closes. Screen-off still locks during a prompt.
+  On the Galaxy S21 FE the activity stays `RESUMED` behind the prompt, so the case never
+  arises there; the suppression covers devices that do stop the activity.
+- **Locking** replaces the navigation back stack (section 2), so vault screens and their
+  ViewModels are discarded.
+- **Process death** loses the in-memory vault key, so a restarted app is always locked.
+
+### 5.2 Screenshot and recent-apps protection
+
+`MainActivity` sets `FLAG_SECURE` on its window in `onCreate`, for every screen rather than only
+credential screens. That avoids gaps during transitions or at the moment of locking, at the cost
+of also blocking screenshots of the Setup and Unlock screens. Screenshots, screen recording and
+the recent-apps thumbnail show a blank window.
+
+Limitations: `FLAG_SECURE` doesn't stop a compromised device, accessibility services that read
+the screen, or someone photographing it.
+
+### 5.3 Clipboard
+
+Code: `security/ClipboardGuard.kt`, `data/AndroidSecretClipboard.kt`.
+
+- Every copy is tagged with a random id in the clip's extras. Passwords are also marked
+  `EXTRA_IS_SENSITIVE` (Android 13+), which hides them from the system clipboard preview.
+- About 30 seconds later the clip is cleared, but only if the clipboard still holds that exact
+  tagged clip. Something copied by another app is never cleared.
+- Android 10+ only lets an app read the clipboard while it has window focus. If Keeper is in the
+  background when the 30 seconds pass, the check runs again when Keeper next gets focus. Until
+  then the copied value stays on the clipboard.
+- Keyboard apps with their own clipboard history (for example Samsung Keyboard or Gboard) may
+  keep a copy that Keeper can't see or clear. Whether they honor the sensitive flag is up to them.
+
+### 5.4 Tests
+
+- JVM: `AutoLockControllerTest` (timer, return in time, screen off, prompt suppression and
+  timing), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
+  restarts on a new copy).
+- Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window.
+- Real device, 18 October 2026, Galaxy S21 FE, Android 16:
+  - All 10 instrumented tests pass.
+  - A screenshot of Keeper is black.
+  - 10 s in the background keeps the vault unlocked; 33 s locks it.
+  - A copied password could be pasted at 12 s and was gone by 39 s.
+  - The activity stays `RESUMED` behind BiometricPrompt.
+  - Turning the screen off locked the vault; on return the Unlock screen prompted for a
+    fingerprint.
