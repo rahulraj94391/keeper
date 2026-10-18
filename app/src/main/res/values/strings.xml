@@ -1,3 +1,50 @@
 <resources>
     <string name="app_name">Keeper</string>
+
+    <!-- Common -->
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_copy">Copy %1$s</string>
+    <string name="action_show_password">Show password</string>
+    <string name="action_hide_password">Hide password</string>
+
+    <!-- Vault list -->
+    <string name="vault_search_hint">Search logins</string>
+    <string name="vault_search_clear">Clear search</string>
+    <string name="vault_add_credential">Add login</string>
+    <string name="vault_favorite">Favorite</string>
+    <string name="vault_empty_title">Your vault is empty</string>
+    <string name="vault_empty_body">Tap Add login to save your first password.</string>
+    <string name="vault_no_results">No logins match “%1$s”</string>
+
+    <!-- Credential fields -->
+    <string name="field_title">Title</string>
+    <string name="field_username">Username</string>
+    <string name="field_password">Password</string>
+    <string name="field_url">Website or app</string>
+    <string name="field_notes">Notes</string>
+    <string name="field_favorite">Mark as favorite</string>
+    <string name="field_required">Required</string>
+    <string name="field_error_required">%1$s is required</string>
+    <plurals name="field_error_too_long">
+        <item quantity="one">Must be %1$d character or fewer</item>
+        <item quantity="other">Must be %1$d characters or fewer</item>
+    </plurals>
+
+    <!-- Credential details -->
+    <string name="detail_edit">Edit</string>
+    <string name="detail_delete">Delete</string>
+    <string name="detail_copied">%1$s copied</string>
+    <string name="detail_delete_title">Delete “%1$s”?</string>
+    <string name="detail_delete_body">This removes the login from your vault. It can’t be undone.</string>
+    <string name="detail_delete_confirm">Delete</string>
+
+    <!-- Add / edit credential -->
+    <string name="edit_title_new">Add login</string>
+    <string name="edit_title_existing">Edit login</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_discard_title">Discard changes?</string>
+    <string name="edit_discard_body">Your changes to this login haven’t been saved.</string>
+    <string name="edit_discard_confirm">Discard</string>
+    <string name="edit_keep_editing">Keep editing</string>
 </resources>
