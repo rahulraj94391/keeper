@@ -273,31 +273,36 @@ front of the app (PRD 6.6). See section 5.1 for how that is modeled.
 
 ### 5.1 Auto-lock
 
-Code: `security/AutoLockController.kt`, hooks in `KeeperApplication`.
+Code: `security/AutoLockController.kt`, hooks in `KeeperApplication`, `MainActivity` and
+`presentation/common/UserActivity.kt`.
 
-- **Background:** `ProcessLifecycleOwner` reports when no Keeper activity is visible (Home,
-  recent apps, or switching apps). What happens next is the user's **Auto-lock** setting:
-  - **Immediately** (default): the vault locks as soon as Keeper leaves the screen. In practice
-    that's about 0.7 s later, because `ProcessLifecycleOwner` waits briefly so that rotation
-    doesn't count as leaving.
-  - **30 seconds** or **1 minute**: the vault locks after that delay unless Keeper comes back
-    first.
+Fixed behavior, stricter than PRD 6.6 (which allows locking sooner than its 30-second
+background default). There is no user setting:
 
-  This is stricter than the PRD's 30-second default, which the PRD allows ("may lock sooner").
-  The longer options exist for copy-and-paste workflows, where every switch to another app
-  would otherwise need an unlock. The setting is stored in `SharedPreferences` (`keeper_settings`,
-  not secret, excluded from backup); a missing or unknown value falls back to Immediately.
-- **Screen off:** a runtime `ACTION_SCREEN_OFF` receiver locks immediately, whatever the setting.
-- **System screens Keeper opens on purpose** (BiometricPrompt, and the file picker for backup
-  export and restore) report when they open and close. While one is open, leaving the
-  foreground does not lock or start the timer. If the user left during the
-  prompt, the setting applies from when the prompt closes (so with Immediately, it locks then).
-  Screen-off still locks during a prompt.
-  On the Galaxy S21 FE the activity stays `RESUMED` behind the prompt, so the case never
-  arises there; the suppression covers devices that do stop the activity.
+- **Leaving Keeper locks it at once.** `ProcessLifecycleOwner` reports when no Keeper activity
+  is visible (Home, recent apps, switching apps), and the vault locks. In practice this happens
+  about 0.7 s later, because `ProcessLifecycleOwner` waits briefly so rotation doesn't count.
+  Every return needs an unlock: the master password, or a fingerprint if biometric unlock is on.
+- **Screen off** locks at once (runtime `ACTION_SCREEN_OFF` receiver).
+- **30 seconds of inactivity** while Keeper is open and unlocked locks it. Activity means:
+  - any touch or key press on the main window (`Activity.onUserInteraction`);
+  - any text change in Keeper's text fields, since soft-keyboard typing doesn't reach the
+    activity (`LocalUserActivity`);
+  - touches inside the password generator sheet, which is its own window.
+
+  Touches inside short confirmation dialogs don't count; if one sits idle for 30 seconds, the
+  lock simply closes it. The timer starts when the vault unlocks and stops when it locks.
+- **Keeper's own system screens** (BiometricPrompt, and the file picker for backup export and
+  restore) report when they open and close. While one is open, leaving the foreground doesn't
+  lock and the inactivity timer is paused. If the user left Keeper during it, the vault locks
+  as soon as it closes. Screen off still locks during one.
 - **Locking** replaces the navigation back stack (section 2), so vault screens and their
   ViewModels are discarded.
 - **Process death** loses the in-memory vault key, so a restarted app is always locked.
+
+History: an earlier build had a Settings choice (Immediately, 30 seconds, 1 minute) that only
+applied to time spent in the background. It was replaced by these fixed rules; the leftover
+`keeper_settings` preferences file is deleted at start-up.
 
 ### 5.2 Screenshot and recent-apps protection
 
@@ -348,16 +353,20 @@ the first composition.
 
 ### 5.4 Tests
 
-- JVM: `AutoLockControllerTest` (each setting, return in time, screen off, prompt suppression
-  and timing, setting changes), `SettingsViewModelTest` (choosing a setting), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
+- JVM: `AutoLockControllerTest` (leaving locks at once, screen off, 30-second inactivity,
+  activity restarts the count, fresh timer after unlock, no timer while locked, system-screen
+  pause and behavior), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
   restarts on a new copy).
 - Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window, and
   `AutofillDisabledTest` checks Compose autofill is off.
 - Real device, 18 October 2026, Galaxy S21 FE, Android 16:
   - All 10 instrumented tests pass.
   - A screenshot of Keeper is black.
-  - With the 30-second setting, 10 s in the background keeps the vault unlocked and 33 s locks
-    it. With the default (Immediately), 2 s away locks it.
+  - Auto-lock rules (18 October 2026, after the rework): leaving Keeper for 2 s locked it;
+    with no input it locked about 30 s after the last key press; scrolling every 20 s kept it
+    unlocked for 74 s, and it then locked 28 s after the last scroll; dragging the generator
+    slider every 20 s kept it unlocked for 66 s. The leftover `keeper_settings` file was gone
+    after the update.
   - A copied password could be pasted at 12 s and was gone by 39 s.
   - The activity stays `RESUMED` behind BiometricPrompt.
   - Turning the screen off locked the vault; on return the Unlock screen prompted for a

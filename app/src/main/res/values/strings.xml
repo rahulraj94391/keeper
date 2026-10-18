@@ -115,11 +115,7 @@
     <string name="settings_biometric_no_hardware">This device doesn’t have a strong biometric sensor</string>
     <string name="settings_biometric_unavailable">Biometrics aren’t available right now</string>
     <string name="settings_auto_lock">Auto-lock</string>
-    <string name="settings_auto_lock_immediately">As soon as you leave Keeper</string>
-    <string name="settings_auto_lock_30s">30 seconds after you leave Keeper</string>
-    <string name="settings_auto_lock_1m">1 minute after you leave Keeper</string>
-    <string name="settings_auto_lock_dialog_title">Lock Keeper</string>
-    <string name="settings_auto_lock_note">Turning the screen off always locks Keeper right away.</string>
+    <string name="settings_auto_lock_summary">Locks when you leave Keeper, when the screen turns off, and after 30 seconds without activity</string>
     <string name="settings_lock_now">Lock now</string>
     <string name="settings_lock_now_summary">Close the vault until you enter your master password</string>
     <string name="settings_export">Export encrypted backup</string>

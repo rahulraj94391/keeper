@@ -1,8 +1,6 @@
 package io.github.rahulraj94391.keeper.security
 
-import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.VaultState
-import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -15,12 +13,15 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class AutoLockControllerTest {
 
+    private val password = "fake master password"
     private val authenticator = testAuthenticator()
-    private val preferences = FakeAutoLockPreferences(AutoLockTimeout.ThirtySeconds)
 
+    /** The controller watches the vault state forever, so it lives in backgroundScope. */
     private suspend fun TestScope.unlockedController(): AutoLockController {
-        authenticator.createVault("fake master password".toCharArray())
-        return AutoLockController(authenticator, this) { preferences.timeout.value.delay }
+        val controller = AutoLockController(authenticator, backgroundScope)
+        authenticator.createVault(password.toCharArray())
+        runCurrent()
+        return controller
     }
 
     private fun TestScope.advanceSeconds(seconds: Long) {
@@ -28,28 +29,17 @@ class AutoLockControllerTest {
         runCurrent()
     }
 
+    private fun assertState(expected: VaultState) = assertEquals(expected, authenticator.state.value)
+
+    // --- Leaving the app ---
+
     @Test
-    fun locksThirtySecondsAfterGoingToBackground() = runTest {
+    fun leavingTheApp_locksImmediately() = runTest {
         val controller = unlockedController()
 
         controller.onAppBackgrounded()
-        advanceSeconds(29)
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
 
-        advanceSeconds(1)
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun comingBackInTime_cancelsTheLock() = runTest {
-        val controller = unlockedController()
-
-        controller.onAppBackgrounded()
-        advanceSeconds(20)
-        controller.onAppForegrounded()
-        advanceSeconds(60)
-
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
+        assertState(VaultState.Locked)
     }
 
     @Test
@@ -58,98 +48,108 @@ class AutoLockControllerTest {
 
         controller.onScreenOff()
 
-        assertEquals(VaultState.Locked, authenticator.state.value)
+        assertState(VaultState.Locked)
+    }
+
+    // --- Inactivity ---
+
+    @Test
+    fun thirtySecondsWithoutActivity_locks() = runTest {
+        unlockedController()
+
+        advanceSeconds(29)
+        assertState(VaultState.Unlocked)
+        advanceSeconds(1)
+        assertState(VaultState.Locked)
     }
 
     @Test
-    fun biometricPrompt_doesNotStartTheTimer() = runTest {
+    fun activity_restartsTheThirtySeconds() = runTest {
+        val controller = unlockedController()
+
+        repeat(4) {
+            advanceSeconds(20)
+            controller.onUserInteraction()
+        }
+        assertState(VaultState.Unlocked) // 80 s open, never 30 s idle
+
+        advanceSeconds(30)
+        assertState(VaultState.Locked)
+    }
+
+    @Test
+    fun unlockingAgain_startsAFreshTimer() = runTest {
+        val controller = unlockedController()
+        controller.onAppBackgrounded()
+        controller.onAppForegrounded()
+        advanceSeconds(5) // the user types the password
+
+        authenticator.unlock(password.toCharArray())
+        runCurrent()
+        advanceSeconds(29)
+        assertState(VaultState.Unlocked)
+        advanceSeconds(1)
+        assertState(VaultState.Locked)
+    }
+
+    @Test
+    fun lockedVault_hasNoTimerRunning() = runTest {
+        val controller = unlockedController()
+        controller.onScreenOff()
+
+        controller.onUserInteraction() // e.g. typing on the Unlock screen
+        advanceSeconds(60)
+
+        assertState(VaultState.Locked)
+    }
+
+    // --- Keeper's own system screens (BiometricPrompt, file picker) ---
+
+    @Test
+    fun systemScreen_neitherLocksOnLeavingNorTimesOut() = runTest {
         val controller = unlockedController()
 
         controller.onSystemUiStarted()
-        controller.onAppBackgrounded() // some devices stop the activity behind the prompt
+        controller.onAppBackgrounded() // the file picker always does this
         advanceSeconds(120)
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
+        assertState(VaultState.Unlocked)
 
         controller.onAppForegrounded()
         controller.onSystemUiFinished()
-        advanceSeconds(120)
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
+        assertState(VaultState.Unlocked)
     }
 
     @Test
-    fun leavingTheAppDuringAPrompt_countsFromWhenThePromptEnds() = runTest {
+    fun afterASystemScreen_theInactivityTimerStartsAgain() = runTest {
+        val controller = unlockedController()
+        controller.onSystemUiStarted()
+        advanceSeconds(60)
+        controller.onSystemUiFinished()
+
+        advanceSeconds(29)
+        assertState(VaultState.Unlocked)
+        advanceSeconds(1)
+        assertState(VaultState.Locked)
+    }
+
+    @Test
+    fun leavingKeeperDuringASystemScreen_locksWhenItCloses() = runTest {
         val controller = unlockedController()
 
         controller.onSystemUiStarted()
         controller.onAppBackgrounded()
-        advanceSeconds(10)
         controller.onSystemUiFinished() // e.g. cancelled because the user switched apps
 
-        advanceSeconds(29)
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
-        advanceSeconds(1)
-        assertEquals(VaultState.Locked, authenticator.state.value)
+        assertState(VaultState.Locked)
     }
 
     @Test
-    fun screenOff_locksEvenDuringAPrompt() = runTest {
+    fun screenOff_locksEvenDuringASystemScreen() = runTest {
         val controller = unlockedController()
 
         controller.onSystemUiStarted()
         controller.onScreenOff()
 
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun immediately_locksAsSoonAsTheAppLeaves() = runTest {
-        preferences.setTimeout(AutoLockTimeout.Immediately)
-        val controller = unlockedController()
-
-        controller.onAppBackgrounded()
-
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun immediately_stillWaitsForAnOpenBiometricPrompt() = runTest {
-        preferences.setTimeout(AutoLockTimeout.Immediately)
-        val controller = unlockedController()
-
-        controller.onSystemUiStarted()
-        controller.onAppBackgrounded()
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
-
-        controller.onSystemUiFinished() // prompt closed while the app was still away
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun oneMinute_waitsSixtySeconds() = runTest {
-        preferences.setTimeout(AutoLockTimeout.OneMinute)
-        val controller = unlockedController()
-
-        controller.onAppBackgrounded()
-        advanceSeconds(59)
-        assertEquals(VaultState.Unlocked, authenticator.state.value)
-        advanceSeconds(1)
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun newSetting_appliesToTheNextTimeTheAppLeaves() = runTest {
-        val controller = unlockedController()
-        controller.onAppBackgrounded()
-        controller.onAppForegrounded()
-
-        preferences.setTimeout(AutoLockTimeout.Immediately)
-        controller.onAppBackgrounded()
-
-        assertEquals(VaultState.Locked, authenticator.state.value)
-    }
-
-    @Test
-    fun defaultIsImmediately() {
-        assertEquals(AutoLockTimeout.Immediately, AutoLockTimeout.DEFAULT)
+        assertState(VaultState.Locked)
     }
 }

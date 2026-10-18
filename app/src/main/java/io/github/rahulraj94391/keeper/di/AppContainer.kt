@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.rahulraj94391.keeper.KeeperApplication
 import io.github.rahulraj94391.keeper.data.AndroidSecretClipboard
-import io.github.rahulraj94391.keeper.data.SharedPrefsAutoLockPreferences
 import io.github.rahulraj94391.keeper.data.auth.BiometricAvailabilityChecker
 import io.github.rahulraj94391.keeper.data.backup.ContentResolverBackupFiles
 import io.github.rahulraj94391.keeper.data.backup.VaultBackupService
@@ -14,7 +13,6 @@ import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
 import io.github.rahulraj94391.keeper.data.local.KeeperDatabase
 import io.github.rahulraj94391.keeper.data.repository.EncryptedCredentialRepository
 import io.github.rahulraj94391.keeper.data.vault.RoomVaultMetadataStore
-import io.github.rahulraj94391.keeper.domain.repository.AutoLockPreferences
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.security.AndroidBiometricKeyStore
@@ -49,9 +47,7 @@ class AppContainer(context: Context) {
     /** Main-thread scope for timers that react to lifecycle and UI events. */
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val autoLockPreferences: AutoLockPreferences = SharedPrefsAutoLockPreferences(context)
-
-    val autoLock = AutoLockController(vaultAuthenticator, mainScope) { autoLockPreferences.timeout.value.delay }
+    val autoLock = AutoLockController(vaultAuthenticator, mainScope)
 
     val clipboardGuard = ClipboardGuard(
         clipboard = AndroidSecretClipboard(context),

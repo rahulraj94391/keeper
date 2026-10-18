@@ -48,6 +48,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.presentation.common.LocalUserActivity
 import io.github.rahulraj94391.keeper.presentation.common.PasswordVisibilityToggle
 import io.github.rahulraj94391.keeper.presentation.common.rememberSecretCopier
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
@@ -289,9 +290,13 @@ private fun FormField(
         is FieldError.TooLong -> pluralStringResource(R.plurals.field_error_too_long, error.max, error.max)
         null -> if (required) stringResource(R.string.field_required) else null
     }
+    val reportActivity = LocalUserActivity.current
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = {
+            reportActivity()
+            onValueChange(it)
+        },
         label = { Text(label) },
         isError = error != null,
         supportingText = supportingText?.let { { Text(it) } },

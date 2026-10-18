@@ -5,11 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material3.RadioButton
 import androidx.compose.ui.Alignment
-import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
@@ -117,8 +113,6 @@ fun SettingsScreen(
             onBack = onBack,
             onBiometricToggle = viewModel::onBiometricToggle,
             onBiometricMessageShown = viewModel::onBiometricMessageShown,
-            onAutoLock = viewModel::onAutoLockClick,
-            onAutoLockSelected = viewModel::onAutoLockSelected,
             onAddSamples = viewModel::addSampleLogins,
             onSamplesAddedShown = viewModel::onSamplesAddedShown,
             onLockNow = viewModel::lockNow,
@@ -140,8 +134,6 @@ private class SettingsActions(
     val onBack: () -> Unit,
     val onBiometricToggle: (Boolean) -> Unit,
     val onBiometricMessageShown: () -> Unit,
-    val onAutoLock: () -> Unit,
-    val onAutoLockSelected: (AutoLockTimeout) -> Unit,
     val onAddSamples: () -> Unit,
     val onSamplesAddedShown: () -> Unit,
     val onLockNow: () -> Unit,
@@ -221,10 +213,10 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
         ) {
             SectionHeader(R.string.settings_section_security)
             BiometricRow(uiState, actions.onBiometricToggle)
+            // Fixed behavior, shown so users know what to expect.
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_auto_lock)) },
-                supportingContent = { Text(stringResource(uiState.autoLockTimeout.labelRes())) },
-                modifier = Modifier.clickable(onClick = actions.onAutoLock),
+                supportingContent = { Text(stringResource(R.string.settings_auto_lock_summary)) },
             )
             SettingsRow(R.string.settings_lock_now, R.string.settings_lock_now_summary, actions.onLockNow)
 
@@ -258,7 +250,6 @@ private fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) 
     uiState.backupWork?.let { BackupProgressDialog(it) }
 
     when (uiState.dialog) {
-        SettingsDialog.AutoLock -> AutoLockDialog(uiState.autoLockTimeout, actions)
         SettingsDialog.ExportPassphrase -> ExportPassphraseDialog(uiState.backupForm, actions)
         SettingsDialog.RestoreConfirm -> AlertDialog(
             onDismissRequest = actions.onDismissDialog,
@@ -309,47 +300,6 @@ private fun BackupProgressDialog(work: BackupWork) {
             }
         },
     )
-}
-
-@Composable
-private fun AutoLockDialog(current: AutoLockTimeout, actions: SettingsActions) {
-    AlertDialog(
-        onDismissRequest = actions.onDismissDialog,
-        title = { Text(stringResource(R.string.settings_auto_lock_dialog_title)) },
-        text = {
-            Column(Modifier.selectableGroup()) {
-                AutoLockTimeout.entries.forEach { option ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = option == current,
-                                role = Role.RadioButton,
-                                onClick = { actions.onAutoLockSelected(option) },
-                            )
-                            .padding(vertical = 8.dp),
-                    ) {
-                        RadioButton(selected = option == current, onClick = null)
-                        Text(stringResource(option.labelRes()), modifier = Modifier.padding(start = 12.dp))
-                    }
-                }
-                Text(
-                    stringResource(R.string.settings_auto_lock_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        },
-        confirmButton = { CancelButton(actions.onDismissDialog) },
-    )
-}
-
-private fun AutoLockTimeout.labelRes(): Int = when (this) {
-    AutoLockTimeout.Immediately -> R.string.settings_auto_lock_immediately
-    AutoLockTimeout.ThirtySeconds -> R.string.settings_auto_lock_30s
-    AutoLockTimeout.OneMinute -> R.string.settings_auto_lock_1m
 }
 
 @Composable
@@ -472,7 +422,7 @@ private fun SettingsPreview() {
     KeeperTheme(dynamicColor = false) {
         SettingsContent(
             uiState = SettingsUiState(),
-            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
+            actions = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}),
         )
     }
 }

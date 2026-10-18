@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.presentation.common.LocalUserActivity
 import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 
 @Composable
@@ -136,9 +137,13 @@ private fun VaultListContent(
 
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val reportActivity = LocalUserActivity.current
     OutlinedTextField(
         value = query,
-        onValueChange = onQueryChange,
+        onValueChange = {
+            reportActivity()
+            onQueryChange(it)
+        },
         modifier = modifier,
         placeholder = { Text(stringResource(R.string.vault_search_hint)) },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },

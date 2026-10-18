@@ -13,9 +13,7 @@ import io.github.rahulraj94391.keeper.data.backup.RestoreResult
 import io.github.rahulraj94391.keeper.data.backup.VaultBackupService
 import io.github.rahulraj94391.keeper.debug.SampleCredentials
 import io.github.rahulraj94391.keeper.di.appContainer
-import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
-import io.github.rahulraj94391.keeper.domain.repository.AutoLockPreferences
 import io.github.rahulraj94391.keeper.domain.repository.CredentialRepository
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
@@ -25,7 +23,7 @@ import java.security.GeneralSecurityException
 import java.time.LocalDate
 import javax.crypto.Cipher
 
-enum class SettingsDialog { AutoLock, ExportPassphrase, RestoreConfirm, RestorePassphrase, Limitations }
+enum class SettingsDialog { ExportPassphrase, RestoreConfirm, RestorePassphrase, Limitations }
 
 enum class PassphraseError { Required, TooShort, Mismatch }
 
@@ -55,7 +53,6 @@ sealed interface BackupMessage {
 }
 
 data class SettingsUiState(
-    val autoLockTimeout: AutoLockTimeout = AutoLockTimeout.DEFAULT,
     val biometricEnabled: Boolean = false,
     val biometricAvailability: BiometricAvailability = BiometricAvailability.Unavailable,
     /** A cipher waiting to be shown in BiometricPrompt to turn biometrics on. No key material. */
@@ -76,7 +73,6 @@ data class SettingsUiState(
 class SettingsViewModel(
     private val authenticator: VaultAuthenticator,
     private val biometricAvailability: () -> BiometricAvailability,
-    private val autoLockPreferences: AutoLockPreferences,
     private val credentialRepository: CredentialRepository,
     private val backupService: VaultBackupService,
     private val today: () -> LocalDate = LocalDate::now,
@@ -93,9 +89,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             authenticator.biometricEnabled.collect { uiState = uiState.copy(biometricEnabled = it) }
         }
-        viewModelScope.launch {
-            autoLockPreferences.timeout.collect { uiState = uiState.copy(autoLockTimeout = it) }
-        }
     }
 
     /** Debug builds only: saves the fake sample logins through the normal encrypted path. */
@@ -110,13 +103,6 @@ class SettingsViewModel(
 
     fun onSamplesAddedShown() {
         uiState = uiState.copy(samplesAdded = null)
-    }
-
-    fun onAutoLockClick() = openDialog(SettingsDialog.AutoLock)
-
-    fun onAutoLockSelected(timeout: AutoLockTimeout) {
-        autoLockPreferences.setTimeout(timeout)
-        dismissDialog()
     }
 
     fun lockNow() = authenticator.lock()
@@ -303,7 +289,6 @@ class SettingsViewModel(
                 SettingsViewModel(
                     container.vaultAuthenticator,
                     container.biometricAvailability::check,
-                    container.autoLockPreferences,
                     container.credentialRepository,
                     container.backupService,
                 )

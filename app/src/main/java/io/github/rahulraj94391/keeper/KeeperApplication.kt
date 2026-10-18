@@ -26,6 +26,9 @@ class KeeperApplication : Application() {
         // stops it. This must run before the first composition.
         // The flag is experimental; recheck it when updating Compose (docs/design.md 5.5).
         ComposeUiFlags.isSemanticAutofillEnabled = false
+        // An earlier build stored an auto-lock timeout choice here; the setting no longer exists.
+        deleteSharedPreferences("keeper_settings")
+
         val autoLock = container.autoLock
 
         // Whole-app foreground/background, not per screen.

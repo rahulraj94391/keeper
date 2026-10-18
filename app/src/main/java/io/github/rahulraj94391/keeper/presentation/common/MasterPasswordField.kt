@@ -29,11 +29,15 @@ fun MasterPasswordField(
     imeAction: ImeAction = ImeAction.Done,
     onImeAction: () -> Unit = {},
 ) {
+    val reportActivity = LocalUserActivity.current
     var visible by remember { mutableStateOf(false) }
     val support = errorText ?: supportingText
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = {
+            reportActivity()
+            onValueChange(it)
+        },
         label = { Text(label) },
         enabled = enabled,
         isError = errorText != null,

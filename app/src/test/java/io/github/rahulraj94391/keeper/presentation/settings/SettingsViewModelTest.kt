@@ -1,10 +1,8 @@
 package io.github.rahulraj94391.keeper.presentation.settings
 
 import io.github.rahulraj94391.keeper.data.repository.InMemoryCredentialRepository
-import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.security.VaultSession
-import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.FakeBackupFiles
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
@@ -30,7 +28,6 @@ class SettingsViewModelTest {
     private val authenticator = testAuthenticator(session = session)
     private val repository = InMemoryCredentialRepository(listOf(testCredential("a"), testCredential("b")))
     private val files = FakeBackupFiles()
-    private val preferences = FakeAutoLockPreferences()
     private lateinit var viewModel: SettingsViewModel
 
     private val backupPassphrase = "a long fake backup phrase"
@@ -40,7 +37,6 @@ class SettingsViewModelTest {
         authenticator.createVault("fake master password".toCharArray())
         viewModel = testSettingsViewModel(
             authenticator,
-            preferences = preferences,
             repository = repository,
             backupService = testBackupService(repository, session, files),
         )
@@ -194,19 +190,6 @@ class SettingsViewModelTest {
 
         assertNull(viewModel.uiState.dialog)
         assertEquals("", viewModel.uiState.backupForm.passphrase)
-    }
-
-    @Test
-    fun autoLock_choiceIsSavedAndShown() {
-        assertEquals(AutoLockTimeout.Immediately, viewModel.uiState.autoLockTimeout)
-
-        viewModel.onAutoLockClick()
-        assertEquals(SettingsDialog.AutoLock, viewModel.uiState.dialog)
-        viewModel.onAutoLockSelected(AutoLockTimeout.OneMinute)
-
-        assertEquals(AutoLockTimeout.OneMinute, preferences.timeout.value)
-        assertEquals(AutoLockTimeout.OneMinute, viewModel.uiState.autoLockTimeout)
-        assertNull(viewModel.uiState.dialog)
     }
 
     @Test

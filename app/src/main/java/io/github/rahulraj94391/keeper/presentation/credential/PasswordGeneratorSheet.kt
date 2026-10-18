@@ -28,6 +28,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.rahulraj94391.keeper.R
+import io.github.rahulraj94391.keeper.presentation.common.LocalUserActivity
+import io.github.rahulraj94391.keeper.presentation.common.reportUserActivity
 import io.github.rahulraj94391.keeper.security.CharacterGroup
 import io.github.rahulraj94391.keeper.security.PasswordGenerator
 import kotlin.math.roundToInt
@@ -57,9 +59,11 @@ private fun PasswordGeneratorContent(state: GeneratorUiState, actions: PasswordG
     val passwordLabel = stringResource(R.string.field_password)
     val range = PasswordGenerator.LENGTH_RANGE
 
+    val reportActivity = LocalUserActivity.current
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
+            .reportUserActivity(reportActivity)
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
             .padding(bottom = 24.dp),
