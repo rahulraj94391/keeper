@@ -1,6 +1,8 @@
 package io.github.rahulraj94391.keeper.security
 
+import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -14,10 +16,11 @@ import org.junit.Test
 class AutoLockControllerTest {
 
     private val authenticator = testAuthenticator()
+    private val preferences = FakeAutoLockPreferences(AutoLockTimeout.ThirtySeconds)
 
     private suspend fun TestScope.unlockedController(): AutoLockController {
         authenticator.createVault("fake master password".toCharArray())
-        return AutoLockController(authenticator, this)
+        return AutoLockController(authenticator, this) { preferences.timeout.value.delay }
     }
 
     private fun TestScope.advanceSeconds(seconds: Long) {
@@ -96,5 +99,57 @@ class AutoLockControllerTest {
         controller.onScreenOff()
 
         assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun immediately_locksAsSoonAsTheAppLeaves() = runTest {
+        preferences.setTimeout(AutoLockTimeout.Immediately)
+        val controller = unlockedController()
+
+        controller.onAppBackgrounded()
+
+        assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun immediately_stillWaitsForAnOpenBiometricPrompt() = runTest {
+        preferences.setTimeout(AutoLockTimeout.Immediately)
+        val controller = unlockedController()
+
+        controller.onSystemAuthStarted()
+        controller.onAppBackgrounded()
+        assertEquals(VaultState.Unlocked, authenticator.state.value)
+
+        controller.onSystemAuthFinished() // prompt closed while the app was still away
+        assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun oneMinute_waitsSixtySeconds() = runTest {
+        preferences.setTimeout(AutoLockTimeout.OneMinute)
+        val controller = unlockedController()
+
+        controller.onAppBackgrounded()
+        advanceSeconds(59)
+        assertEquals(VaultState.Unlocked, authenticator.state.value)
+        advanceSeconds(1)
+        assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun newSetting_appliesToTheNextTimeTheAppLeaves() = runTest {
+        val controller = unlockedController()
+        controller.onAppBackgrounded()
+        controller.onAppForegrounded()
+
+        preferences.setTimeout(AutoLockTimeout.Immediately)
+        controller.onAppBackgrounded()
+
+        assertEquals(VaultState.Locked, authenticator.state.value)
+    }
+
+    @Test
+    fun defaultIsImmediately() {
+        assertEquals(AutoLockTimeout.Immediately, AutoLockTimeout.DEFAULT)
     }
 }

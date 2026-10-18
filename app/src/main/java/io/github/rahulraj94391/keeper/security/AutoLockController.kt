@@ -6,12 +6,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Locks the vault automatically (PRD 6.6):
- * - 30 seconds after the app leaves the foreground, unless it comes back first;
- * - immediately when the screen turns off.
+ * - when the app leaves the foreground: at once, or after the delay the user chose in Settings
+ *   if it doesn't come back first;
+ * - immediately when the screen turns off, whatever the setting.
  *
  * The system BiometricPrompt can push the app into the background on some devices. While a
  * prompt Keeper started is showing, leaving the foreground does not start the timer; the
@@ -20,7 +20,8 @@ import kotlin.time.Duration.Companion.seconds
 class AutoLockController(
     private val authenticator: VaultAuthenticator,
     private val scope: CoroutineScope,
-    private val backgroundTimeout: Duration = 30.seconds,
+    /** Read each time the app leaves the foreground, so a new setting applies right away. */
+    private val backgroundTimeout: () -> Duration,
 ) {
     private var pendingLock: Job? = null
     private var systemAuthInProgress = false
@@ -61,8 +62,14 @@ class AutoLockController(
 
     private fun scheduleLock() {
         pendingLock?.cancel()
+        pendingLock = null
+        val timeout = backgroundTimeout()
+        if (timeout <= Duration.ZERO) {
+            authenticator.lock()
+            return
+        }
         pendingLock = scope.launch {
-            delay(backgroundTimeout)
+            delay(timeout)
             authenticator.lock()
         }
     }

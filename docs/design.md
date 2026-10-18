@@ -275,13 +275,23 @@ front of the app (PRD 6.6). See section 5.1 for how that is modeled.
 
 Code: `security/AutoLockController.kt`, hooks in `KeeperApplication`.
 
-- **Background:** `ProcessLifecycleOwner` reports when no Keeper activity is visible. After
-  30 seconds in the background the vault locks; returning sooner cancels the timer. The timeout
-  isn't user-configurable yet, so it can't be made longer (PRD 6.6).
-- **Screen off:** a runtime `ACTION_SCREEN_OFF` receiver locks immediately.
+- **Background:** `ProcessLifecycleOwner` reports when no Keeper activity is visible (Home,
+  recent apps, or switching apps). What happens next is the user's **Auto-lock** setting:
+  - **Immediately** (default): the vault locks as soon as Keeper leaves the screen. In practice
+    that's about 0.7 s later, because `ProcessLifecycleOwner` waits briefly so that rotation
+    doesn't count as leaving.
+  - **30 seconds** or **1 minute**: the vault locks after that delay unless Keeper comes back
+    first.
+
+  This is stricter than the PRD's 30-second default, which the PRD allows ("may lock sooner").
+  The longer options exist for copy-and-paste workflows, where every switch to another app
+  would otherwise need an unlock. The setting is stored in `SharedPreferences` (`keeper_settings`,
+  not secret, excluded from backup); a missing or unknown value falls back to Immediately.
+- **Screen off:** a runtime `ACTION_SCREEN_OFF` receiver locks immediately, whatever the setting.
 - **BiometricPrompt:** the prompt launcher reports when a prompt opens and closes. While one is
-  open, leaving the foreground does not start the timer. If the user left during the prompt,
-  the 30 seconds count from when the prompt closes. Screen-off still locks during a prompt.
+  open, leaving the foreground does not lock or start the timer. If the user left during the
+  prompt, the setting applies from when the prompt closes (so with Immediately, it locks then).
+  Screen-off still locks during a prompt.
   On the Galaxy S21 FE the activity stays `RESUMED` behind the prompt, so the case never
   arises there; the suppression covers devices that do stop the activity.
 - **Locking** replaces the navigation back stack (section 2), so vault screens and their
@@ -314,14 +324,15 @@ Code: `security/ClipboardGuard.kt`, `data/AndroidSecretClipboard.kt`.
 
 ### 5.4 Tests
 
-- JVM: `AutoLockControllerTest` (timer, return in time, screen off, prompt suppression and
-  timing), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
+- JVM: `AutoLockControllerTest` (each setting, return in time, screen off, prompt suppression
+  and timing, setting changes), `SettingsViewModelTest` (choosing a setting), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
   restarts on a new copy).
 - Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window.
 - Real device, 18 October 2026, Galaxy S21 FE, Android 16:
   - All 10 instrumented tests pass.
   - A screenshot of Keeper is black.
-  - 10 s in the background keeps the vault unlocked; 33 s locks it.
+  - With the 30-second setting, 10 s in the background keeps the vault unlocked and 33 s locks
+    it. With the default (Immediately), 2 s away locks it.
   - A copied password could be pasted at 12 s and was gone by 39 s.
   - The activity stays `RESUMED` behind BiometricPrompt.
   - Turning the screen off locked the vault; on return the Unlock screen prompted for a

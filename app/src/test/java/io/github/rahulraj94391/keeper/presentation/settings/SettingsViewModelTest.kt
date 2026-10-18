@@ -1,8 +1,10 @@
 package io.github.rahulraj94391.keeper.presentation.settings
 
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
+import io.github.rahulraj94391.keeper.domain.model.AutoLockTimeout
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.testing.FakeAutoLockPreferences
 import io.github.rahulraj94391.keeper.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,7 +20,7 @@ class SettingsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authenticator = testAuthenticator()
-    private val viewModel by lazy { SettingsViewModel(authenticator) { BiometricAvailability.Available } }
+    private val viewModel by lazy { SettingsViewModel(authenticator, { BiometricAvailability.Available }, FakeAutoLockPreferences()) }
 
     @Test
     fun lockNow_locksTheVault() = runTest {
@@ -78,5 +80,20 @@ class SettingsViewModelTest {
         assertNull(viewModel.uiState.dialog)
         assertEquals("", viewModel.uiState.backupForm.passphrase)
         assertFalse(viewModel.uiState.showBackupUnavailable)
+    }
+
+    @Test
+    fun autoLock_choiceIsSavedAndShown() {
+        val preferences = FakeAutoLockPreferences()
+        val viewModel = SettingsViewModel(authenticator, { BiometricAvailability.Available }, preferences)
+        assertEquals(AutoLockTimeout.Immediately, viewModel.uiState.autoLockTimeout)
+
+        viewModel.onAutoLockClick()
+        assertEquals(SettingsDialog.AutoLock, viewModel.uiState.dialog)
+        viewModel.onAutoLockSelected(AutoLockTimeout.OneMinute)
+
+        assertEquals(AutoLockTimeout.OneMinute, preferences.timeout.value)
+        assertEquals(AutoLockTimeout.OneMinute, viewModel.uiState.autoLockTimeout)
+        assertNull(viewModel.uiState.dialog)
     }
 }
