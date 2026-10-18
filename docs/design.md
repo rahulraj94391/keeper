@@ -79,6 +79,7 @@ Measured with `Argon2idBenchmarkTest` (instrumented test, default parameters):
 | Device | Build | Runs (ms) | Median |
 |---|---|---|---|
 | Emulator, Pixel 9 Pro image (arm64-v8a), Apple Silicon host | debug | 1128, 1245, 1286, 1399, 1435 | 1.29 s |
+| Samsung Galaxy S21 FE (SM-G990E), Android 16 | debug | 929, 941, 961, 987, 1041 | 0.96 s |
 
 The emulator runs on a desktop CPU, and debug builds aren't optimized by R8. PRD 12 asks for
 0.5–1.5 s on a mid-range device. The emulator result is already near the top of that range, so a
@@ -250,8 +251,18 @@ a successful prompt result alone never unlocks anything.
 - Instrumented: `MigrationTest` (v1 → v2 keeps the vault unlockable);
   `AndroidBiometricKeyStoreTest` checks the real Keystore key refuses to work without
   authentication. It is skipped on devices with no enrolled biometric.
-- Still needed (PRD 11): a run on a real device, or an emulator with an enrolled fingerprint,
-  covering turn on, unlock, cancel, and re-enrollment invalidation.
+- Real device, 18 October 2026, Samsung Galaxy S21 FE (SM-G990E), Android 16, enrolled
+  fingerprint:
+  - All 9 instrumented tests pass, including the 3 Keystore tests.
+  - Turn on from Settings: the system prompt appeared, a fingerprint turned it on, and the
+    database stored a 12-byte Keystore nonce and 48-byte wrapped key.
+  - Lock, then fingerprint: the Unlock screen prompted automatically and unlocked to the same
+    vault contents. The system log showed a strong-biometric success with `IsCrypto: true` and a
+    keystore2 auth token for the operation.
+  - Lock, then "Use master password": the vault stayed locked with no error, and the master
+    password unlocked it.
+- Not yet tested on a device: invalidation after adding or removing a fingerprint (covered by
+  JVM tests and `deletedKey_reportsInvalidated`), and lockout after repeated failed touches.
 
 ### 4.5 Known gap
 
