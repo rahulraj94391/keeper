@@ -351,12 +351,50 @@ the first composition.
 - **Not covered:** keyboard apps may still keep their own history of what was typed. Password
   fields ask keyboards not to learn, but that's up to the keyboard.
 
+### 5.6 Master-password attempt limit
+
+Code: `security/UnlockThrottle.kt`, `data/auth/AndroidThrottleStorage.kt`, enforced in
+`LocalVaultAuthenticator.unlock()`.
+
+Wrong master passwords on the Unlock screen are rate-limited:
+
+| Wrong attempts in a row | What happens |
+|---|---|
+| 1–2 | Generic error |
+| 3–4 | Error plus a warning: "2 (then 1) more wrong attempts and you’ll have to wait" |
+| 5 | 30-second wait |
+| 6, 7, 8, … | The wait doubles each time: 1, 2, 4, 8, 16, 32, 64, 128 minutes |
+| 14 and after | 3 hours (the cap) |
+
+- **During a wait** the authenticator refuses without checking the password, so no Argon2id
+  runs and nothing is learned. The Unlock screen disables the field and button and shows a live
+  countdown.
+- **Fingerprint unlock still works during a wait.** It has its own system lockout.
+- **Any successful unlock** (password or fingerprint), and creating a vault, reset the count.
+- **Saved state:** `keeper_unlock_throttle` SharedPreferences (count, wait length, start time).
+  It's written synchronously before the result is returned, so killing the app right after a
+  wrong attempt doesn't erase it, and a restart doesn't skip a wait. Not secret; excluded from
+  backup.
+- **Clock handling:** within one boot, the wait is measured on `elapsedRealtime`, so changing
+  the system clock doesn't shorten it. After a reboot it falls back to wall-clock time; if the
+  clock was moved backward, the full wait restarts from now.
+
+Limitations:
+- This only protects the Unlock screen. Someone who copies the vault file off a rooted or
+  compromised phone can guess offline, slowed only by Argon2id (section 1.1).
+- Clearing the app's data removes the counter, but it also deletes the vault.
+- Rebooting and then moving the clock forward can shorten a wait that started before the reboot.
+
 ### 5.4 Tests
 
 - JVM: `AutoLockControllerTest` (leaving locks at once, screen off, 30-second inactivity,
   activity restarts the count, fresh timer after unlock, no timer while locked, system-screen
   pause and behavior), `ClipboardGuardTest` (clears own clip, never another app's, waits for focus,
   restarts on a new copy).
+- JVM: `UnlockThrottleTest` (backoff schedule and cap, warnings, waits, reset, restart, clock
+  changes within a boot and across reboots), `UnlockLockoutTest` (refuses during a wait even
+  with the right password, doubling, reset, fingerprint during a wait),
+  `UnlockLockoutViewModelTest` (warning, countdown, disabled submit, wait shown on reopening).
 - Instrumented: `SecureWindowTest` checks `FLAG_SECURE` on the main window, and
   `AutofillDisabledTest` checks Compose autofill is off.
 - Real device, 18 October 2026, Galaxy S21 FE, Android 16:
@@ -367,6 +405,10 @@ the first composition.
     unlocked for 74 s, and it then locked 28 s after the last scroll; dragging the generator
     slider every 20 s kept it unlocked for 66 s. The leftover `keeper_settings` file was gone
     after the update.
+  - Attempt limit: attempts 1–2 showed the generic error, 3–4 the warning, and the 5th a
+    30-second countdown with the field disabled. After a force-stop and relaunch the wait was
+    still running (0:19 left), and the right password couldn't be entered. After the wait it
+    unlocked, the saved count went back to 0, and the next wrong attempt showed the plain error.
   - A copied password could be pasted at 12 s and was gone by 39 s.
   - The activity stays `RESUMED` behind BiometricPrompt.
   - Turning the screen off locked the vault; on return the Unlock screen prompted for a

@@ -9,9 +9,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import io.github.rahulraj94391.keeper.domain.model.VaultState
+import io.github.rahulraj94391.keeper.domain.repository.UnlockResult
 import io.github.rahulraj94391.keeper.security.VaultSession
 import io.github.rahulraj94391.keeper.testing.FakeBiometricKeyStore
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
+import io.github.rahulraj94391.keeper.testing.testThrottle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,11 +73,11 @@ class LocalVaultAuthenticatorTest {
         val restarted = testAuthenticator(store, session)
         assertEquals(VaultState.Locked, restarted.state.value)
 
-        assertFalse(restarted.unlock("wrong fake password".toCharArray()))
+        assertTrue(restarted.unlock("wrong fake password".toCharArray()) is UnlockResult.WrongPassword)
         assertFalse(session.isOpen)
         assertEquals(VaultState.Locked, restarted.state.value)
 
-        assertTrue(restarted.unlock(password.toCharArray()))
+        assertEquals(UnlockResult.Success, restarted.unlock(password.toCharArray()))
         assertTrue(session.isOpen)
         assertEquals(VaultState.Unlocked, restarted.state.value)
     }
@@ -95,7 +97,7 @@ class LocalVaultAuthenticatorTest {
     fun unlock_withNoVault_fails() = runTest {
         val authenticator = testAuthenticator(store, session)
 
-        assertFalse(authenticator.unlock(password.toCharArray()))
+        assertTrue(authenticator.unlock(password.toCharArray()) is UnlockResult.WrongPassword)
         assertNull(store.load())
         assertEquals(VaultState.NoVault, authenticator.state.value)
     }
@@ -110,7 +112,7 @@ class LocalVaultAuthenticatorTest {
             }
         }
         val authenticator = LocalVaultAuthenticator(
-            slowStore, testKeyManager(), session, FakeBiometricKeyStore(),
+            slowStore, testKeyManager(), session, FakeBiometricKeyStore(), testThrottle(),
             CoroutineScope(Dispatchers.Unconfined), Dispatchers.Unconfined,
         )
         assertEquals(VaultState.Loading, authenticator.state.value)

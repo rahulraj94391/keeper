@@ -37,6 +37,12 @@
     <string name="unlock_subtitle">Enter your master password to open your vault.</string>
     <string name="unlock_button">Unlock</string>
     <string name="unlock_error">Could not unlock vault. Check your password or vault data.</string>
+    <plurals name="unlock_attempts_warning">
+        <item quantity="one">Could not unlock vault. %1$d more wrong attempt and you’ll have to wait before trying again.</item>
+        <item quantity="other">Could not unlock vault. %1$d more wrong attempts and you’ll have to wait before trying again.</item>
+    </plurals>
+    <string name="unlock_locked_out">Too many wrong attempts. Try again in %1$s.</string>
+    <string name="unlock_locked_out_biometric">Too many wrong attempts. Try again in %1$s, or unlock with biometrics.</string>
     <string name="unlock_with_biometrics">Unlock with biometrics</string>
 
     <!-- Biometric prompt and messages -->

@@ -3,6 +3,7 @@ package io.github.rahulraj94391.keeper.domain.repository
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import kotlinx.coroutines.flow.StateFlow
 import javax.crypto.Cipher
+import kotlin.time.Duration
 
 /**
  * Creates, unlocks and locks the vault. Master passwords are passed as [CharArray] so the
@@ -14,8 +15,14 @@ interface VaultAuthenticator {
     /** Creates a new vault protected by [masterPassword] and leaves it unlocked. */
     suspend fun createVault(masterPassword: CharArray)
 
-    /** Returns true and unlocks the vault when [masterPassword] is correct. */
-    suspend fun unlock(masterPassword: CharArray): Boolean
+    /**
+     * Unlocks the vault when [masterPassword] is correct. Wrong attempts are rate-limited: during
+     * a wait the password isn't checked at all (see UnlockThrottle).
+     */
+    suspend fun unlock(masterPassword: CharArray): UnlockResult
+
+    /** Time left before the master password may be tried again, or null if it may be now. */
+    fun passwordLockoutRemaining(): Duration?
 
     fun lock()
 
@@ -39,6 +46,19 @@ interface VaultAuthenticator {
 
     /** Unwraps the vault key with the authorized cipher and unlocks. Returns false on failure. */
     suspend fun completeBiometricUnlock(authorizedCipher: Cipher): Boolean
+}
+
+sealed interface UnlockResult {
+    data object Success : UnlockResult
+
+    /**
+     * Wrong password. [attemptsBeforeDelay] is set when a wait is close (a warning);
+     * [lockout] is set when this attempt started a wait.
+     */
+    data class WrongPassword(val attemptsBeforeDelay: Int?, val lockout: Duration?) : UnlockResult
+
+    /** Too many wrong attempts; the password wasn't checked. */
+    data class LockedOut(val remaining: Duration) : UnlockResult
 }
 
 sealed interface BiometricUnlockStart {

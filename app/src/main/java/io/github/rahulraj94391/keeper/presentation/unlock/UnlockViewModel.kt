@@ -11,10 +11,15 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.rahulraj94391.keeper.di.appContainer
 import io.github.rahulraj94391.keeper.domain.model.BiometricAvailability
 import io.github.rahulraj94391.keeper.domain.repository.BiometricUnlockStart
+import io.github.rahulraj94391.keeper.domain.repository.UnlockResult
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.presentation.common.BiometricPromptResult
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.crypto.Cipher
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 enum class BiometricMessage { KeyInvalidated, Lockout, Failed }
 
@@ -22,12 +27,18 @@ data class UnlockUiState(
     val password: String = "",
     val isUnlocking: Boolean = false,
     val showError: Boolean = false,
+    /** Set after a wrong password when a wait is close: how many attempts are left before it. */
+    val attemptsBeforeDelay: Int? = null,
+    /** Time left before the password may be tried again; null when it may be tried now. */
+    val lockoutRemaining: Duration? = null,
     val showBiometricButton: Boolean = false,
     val biometricMessage: BiometricMessage? = null,
     /** A cipher waiting to be shown in BiometricPrompt. Holds no key material. */
     val biometricRequest: Cipher? = null,
 ) {
-    val canSubmit: Boolean get() = password.isNotEmpty() && !isUnlocking
+    val isLockedOut: Boolean get() = lockoutRemaining != null
+
+    val canSubmit: Boolean get() = password.isNotEmpty() && !isUnlocking && !isLockedOut
 
     override fun toString(): String = "UnlockUiState(isUnlocking=$isUnlocking, showError=$showError)"
 }
@@ -41,8 +52,11 @@ class UnlockViewModel(
         private set
 
     private var autoPrompted = false
+    private var countdown: Job? = null
 
     init {
+        // A wait from an earlier attempt may still be running, even across app restarts.
+        authenticator.passwordLockoutRemaining()?.let(::startCountdown)
         viewModelScope.launch {
             authenticator.biometricEnabled.collect { enabled ->
                 uiState = uiState.copy(
@@ -53,22 +67,46 @@ class UnlockViewModel(
     }
 
     fun onPasswordChange(value: String) {
-        uiState = uiState.copy(password = value, showError = false)
+        uiState = uiState.copy(password = value, showError = false, attemptsBeforeDelay = null)
     }
 
     fun unlock() {
         val state = uiState
         if (!state.canSubmit) return
-        uiState = state.copy(isUnlocking = true, showError = false, biometricMessage = null)
+        uiState = state.copy(isUnlocking = true, showError = false, attemptsBeforeDelay = null, biometricMessage = null)
         viewModelScope.launch {
             val chars = state.password.toCharArray()
-            val unlocked = try {
+            val result = try {
                 authenticator.unlock(chars)
             } finally {
                 chars.fill('\u0000')
             }
-            // Clear the field either way. A wrong attempt shows only a generic error (PRD 6.2).
-            uiState = uiState.copy(password = "", isUnlocking = false, showError = !unlocked)
+            // Clear the field either way. A wrong attempt shows only a generic error (PRD 6.2),
+            // plus a warning when a wait is close.
+            uiState = uiState.copy(password = "", isUnlocking = false)
+            when (result) {
+                UnlockResult.Success -> Unit
+                is UnlockResult.WrongPassword -> {
+                    uiState = uiState.copy(showError = true, attemptsBeforeDelay = result.attemptsBeforeDelay)
+                    result.lockout?.let(::startCountdown)
+                }
+                is UnlockResult.LockedOut -> startCountdown(result.remaining)
+            }
+        }
+    }
+
+    /** Ticks the remaining wait once a second, from the authenticator's own clock. */
+    private fun startCountdown(initial: Duration) {
+        countdown?.cancel()
+        uiState = uiState.copy(lockoutRemaining = initial)
+        countdown = viewModelScope.launch {
+            var remaining: Duration? = initial
+            while (remaining != null && remaining > Duration.ZERO) {
+                uiState = uiState.copy(lockoutRemaining = remaining)
+                delay(1.seconds)
+                remaining = authenticator.passwordLockoutRemaining()
+            }
+            uiState = uiState.copy(lockoutRemaining = null, showError = false)
         }
     }
 

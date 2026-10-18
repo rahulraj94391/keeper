@@ -3,6 +3,7 @@ package io.github.rahulraj94391.keeper.data.auth
 import io.github.rahulraj94391.keeper.data.vault.InMemoryVaultMetadataStore
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.domain.repository.BiometricUnlockStart
+import io.github.rahulraj94391.keeper.domain.repository.UnlockResult
 import io.github.rahulraj94391.keeper.security.VaultSession
 import io.github.rahulraj94391.keeper.testing.FakeBiometricKeyStore
 import io.github.rahulraj94391.keeper.testing.testAuthenticator
@@ -86,7 +87,7 @@ class BiometricUnlockTest {
         assertEquals(BiometricUnlockStart.KeyInvalidated, authenticator.startBiometricUnlock())
         assertFalse(authenticator.biometricEnabled.value)
         assertNull(store.load()?.biometric)
-        assertTrue(authenticator.unlock(password.toCharArray()))
+        assertEquals(UnlockResult.Success, authenticator.unlock(password.toCharArray()))
     }
 
     @Test

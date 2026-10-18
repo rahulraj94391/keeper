@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.rahulraj94391.keeper.KeeperApplication
 import io.github.rahulraj94391.keeper.data.AndroidSecretClipboard
+import io.github.rahulraj94391.keeper.data.auth.AndroidThrottleClock
 import io.github.rahulraj94391.keeper.data.auth.BiometricAvailabilityChecker
+import io.github.rahulraj94391.keeper.data.auth.SharedPrefsThrottleStore
 import io.github.rahulraj94391.keeper.data.backup.ContentResolverBackupFiles
 import io.github.rahulraj94391.keeper.data.backup.VaultBackupService
 import io.github.rahulraj94391.keeper.data.auth.LocalVaultAuthenticator
@@ -18,6 +20,7 @@ import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.security.AndroidBiometricKeyStore
 import io.github.rahulraj94391.keeper.security.AutoLockController
 import io.github.rahulraj94391.keeper.security.ClipboardGuard
+import io.github.rahulraj94391.keeper.security.UnlockThrottle
 import io.github.rahulraj94391.keeper.security.VaultKeyManager
 import io.github.rahulraj94391.keeper.security.VaultSession
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +42,7 @@ class AppContainer(context: Context) {
         keyManager = VaultKeyManager(),
         session = vaultSession,
         biometricKeyStore = AndroidBiometricKeyStore(),
+        unlockThrottle = UnlockThrottle(SharedPrefsThrottleStore(context), AndroidThrottleClock(context)),
         appScope = appScope,
     )
 

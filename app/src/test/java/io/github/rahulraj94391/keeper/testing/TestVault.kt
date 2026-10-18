@@ -5,6 +5,7 @@ import io.github.rahulraj94391.keeper.data.vault.InMemoryVaultMetadataStore
 import io.github.rahulraj94391.keeper.data.vault.VaultMetadataStore
 import io.github.rahulraj94391.keeper.security.Argon2Params
 import io.github.rahulraj94391.keeper.security.VaultKeyManager
+import io.github.rahulraj94391.keeper.security.UnlockThrottle
 import io.github.rahulraj94391.keeper.security.VaultSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,11 +20,13 @@ fun testAuthenticator(
     store: VaultMetadataStore = InMemoryVaultMetadataStore(),
     session: VaultSession = VaultSession(),
     biometricKeyStore: FakeBiometricKeyStore = FakeBiometricKeyStore(),
+    throttle: UnlockThrottle = testThrottle(),
 ) = LocalVaultAuthenticator(
     store = store,
     keyManager = testKeyManager(),
     session = session,
     biometricKeyStore = biometricKeyStore,
+    unlockThrottle = throttle,
     appScope = CoroutineScope(Dispatchers.Unconfined),
     cryptoDispatcher = Dispatchers.Unconfined,
 )

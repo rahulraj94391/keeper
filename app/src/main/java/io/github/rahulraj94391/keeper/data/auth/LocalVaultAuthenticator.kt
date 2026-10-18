@@ -3,11 +3,14 @@ package io.github.rahulraj94391.keeper.data.auth
 import io.github.rahulraj94391.keeper.data.vault.VaultMetadataStore
 import io.github.rahulraj94391.keeper.domain.model.VaultState
 import io.github.rahulraj94391.keeper.domain.repository.BiometricUnlockStart
+import io.github.rahulraj94391.keeper.domain.repository.UnlockResult
 import io.github.rahulraj94391.keeper.domain.repository.VaultAuthenticator
 import io.github.rahulraj94391.keeper.security.BiometricKeyInvalidatedException
 import io.github.rahulraj94391.keeper.security.BiometricKeyStore
 import io.github.rahulraj94391.keeper.security.BiometricVekWrapping
 import io.github.rahulraj94391.keeper.security.BiometricWrap
+import io.github.rahulraj94391.keeper.security.ThrottleStatus
+import io.github.rahulraj94391.keeper.security.UnlockThrottle
 import io.github.rahulraj94391.keeper.security.VaultKeyManager
 import io.github.rahulraj94391.keeper.security.VaultSession
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.security.GeneralSecurityException
 import javax.crypto.Cipher
+import kotlin.time.Duration
 
 /**
  * Unlocks the on-device vault with the master password (PRD 6.1, 6.2) or, when turned on,
@@ -34,6 +38,7 @@ class LocalVaultAuthenticator(
     private val keyManager: VaultKeyManager,
     private val session: VaultSession,
     private val biometricKeyStore: BiometricKeyStore,
+    private val unlockThrottle: UnlockThrottle,
     appScope: CoroutineScope,
     /** Argon2id is slow by design and Keystore calls can block; neither runs on the main thread. */
     private val cryptoDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -67,18 +72,31 @@ class LocalVaultAuthenticator(
             newVault.vek.fill(0)
             throw e
         }
+        unlockThrottle.recordSuccess()
         session.open(newVault.vek)
         _state.value = VaultState.Unlocked
     }
 
-    override suspend fun unlock(masterPassword: CharArray): Boolean = mutex.withLock {
-        if (awaitLoaded() == VaultState.Unlocked) return true
-        val metadata = store.load() ?: return false
+    override suspend fun unlock(masterPassword: CharArray): UnlockResult = mutex.withLock {
+        if (awaitLoaded() == VaultState.Unlocked) return UnlockResult.Success
+        val throttle = unlockThrottle.status()
+        if (throttle is ThrottleStatus.LockedOut) return UnlockResult.LockedOut(throttle.remaining)
+        val metadata = store.load() ?: return UnlockResult.WrongPassword(attemptsBeforeDelay = null, lockout = null)
         val vek = withContext(cryptoDispatcher) { keyManager.unwrap(masterPassword, metadata) }
-            ?: return false
+        if (vek == null) {
+            // Saved to disk before the caller learns the result.
+            return when (val next = unlockThrottle.recordFailure()) {
+                is ThrottleStatus.Allowed -> UnlockResult.WrongPassword(next.attemptsBeforeDelay, lockout = null)
+                is ThrottleStatus.LockedOut -> UnlockResult.WrongPassword(attemptsBeforeDelay = null, lockout = next.remaining)
+            }
+        }
+        unlockThrottle.recordSuccess()
         openSession(vek)
-        true
+        UnlockResult.Success
     }
+
+    override fun passwordLockoutRemaining(): Duration? =
+        (unlockThrottle.status() as? ThrottleStatus.LockedOut)?.remaining
 
     override fun lock() {
         session.close()
@@ -136,6 +154,8 @@ class LocalVaultAuthenticator(
         val vek = withContext(cryptoDispatcher) {
             BiometricVekWrapping.unwrap(authorizedCipher, wrap.wrappedVek, wrap.keyAlias)
         } ?: return false
+        // A fingerprint proves the owner is here: clear any password lockout.
+        unlockThrottle.recordSuccess()
         openSession(vek)
         true
     }
