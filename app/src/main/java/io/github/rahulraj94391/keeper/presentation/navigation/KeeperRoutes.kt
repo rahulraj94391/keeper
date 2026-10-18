@@ -13,3 +13,10 @@ data class CredentialDetailRoute(val id: String)
 /** [id] is null when adding a new credential. */
 @Serializable
 data class CredentialEditRoute(val id: String? = null)
+
+/** First-launch vault creation. */
+@Serializable
+data object SetupRoute
+
+@Serializable
+data object UnlockRoute

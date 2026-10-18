@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -49,6 +50,7 @@ import io.github.rahulraj94391.keeper.ui.theme.KeeperTheme
 fun VaultListScreen(
     onAddClick: () -> Unit,
     onCredentialClick: (id: String) -> Unit,
+    onLockClick: () -> Unit,
     viewModel: VaultListViewModel = viewModel(factory = VaultListViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,6 +60,7 @@ fun VaultListScreen(
         onQueryChange = viewModel::onQueryChange,
         onAddClick = onAddClick,
         onCredentialClick = onCredentialClick,
+        onLockClick = onLockClick,
     )
 }
 
@@ -69,10 +72,18 @@ private fun VaultListContent(
     onQueryChange: (String) -> Unit,
     onAddClick: () -> Unit,
     onCredentialClick: (id: String) -> Unit,
+    onLockClick: () -> Unit,
 ) {
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) })
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = onLockClick) {
+                        Icon(Icons.Filled.Lock, contentDescription = stringResource(R.string.vault_lock))
+                    }
+                },
+            )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -215,6 +226,7 @@ private fun VaultListPreview() {
             onQueryChange = {},
             onAddClick = {},
             onCredentialClick = {},
+            onLockClick = {},
         )
     }
 }

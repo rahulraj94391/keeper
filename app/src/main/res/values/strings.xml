@@ -8,7 +8,38 @@
     <string name="action_show_password">Show password</string>
     <string name="action_hide_password">Hide password</string>
 
+    <!-- Setup -->
+    <string name="setup_title">Create your vault</string>
+    <string name="setup_intro_local">Keeper keeps your passwords only on this device. Nothing is sent to a server, and there’s no account.</string>
+    <string name="setup_intro_master">Your master password unlocks the vault. Choose something long that you don’t use anywhere else.</string>
+    <string name="setup_master_password">Master password</string>
+    <string name="setup_confirm_password">Confirm master password</string>
+    <plurals name="setup_hint">
+        <item quantity="one">Use at least %1$d character. A few unrelated words make a strong passphrase that’s easy to remember.</item>
+        <item quantity="other">Use at least %1$d characters. A few unrelated words make a strong passphrase that’s easy to remember.</item>
+    </plurals>
+    <plurals name="setup_error_too_short">
+        <item quantity="one">Use at least %1$d character</item>
+        <item quantity="other">Use at least %1$d characters</item>
+    </plurals>
+    <string name="setup_error_mismatch">Passwords don’t match</string>
+    <string name="setup_acknowledge">I understand that if I forget my master password, my vault can’t be recovered.</string>
+    <string name="setup_error_acknowledge">Please confirm you understand before continuing.</string>
+    <string name="setup_create">Create vault</string>
+    <string name="setup_strength">Strength: %1$s</string>
+    <string name="strength_weak">Too weak</string>
+    <string name="strength_fair">Fair</string>
+    <string name="strength_strong">Strong</string>
+    <string name="strength_very_strong">Very strong</string>
+
+    <!-- Unlock -->
+    <string name="unlock_title">Keeper is locked</string>
+    <string name="unlock_subtitle">Enter your master password to open your vault.</string>
+    <string name="unlock_button">Unlock</string>
+    <string name="unlock_error">Could not unlock vault. Check your password or vault data.</string>
+
     <!-- Vault list -->
+    <string name="vault_lock">Lock vault</string>
     <string name="vault_search_hint">Search logins</string>
     <string name="vault_search_clear">Clear search</string>
     <string name="vault_add_credential">Add login</string>
